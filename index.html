@@ -304,7 +304,7 @@ details>div{margin-top:6px;font-size:12px;color:var(--muted);}
   <div class="logo-icon">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><path d="M3 3h3v3H3zM3 10.5h3v3H3zM3 18h3v3H3zM10.5 3h3v3h-3zM10.5 10.5h3v3h-3zM10.5 18h3v3h-3zM18 3h3v3h-3zM18 10.5h3v3h-3zM18 18h3v3h-3z"/></svg>
   </div>
-  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.14</div></div>
+  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.16</div></div>
   <div class="hdr-right">
     <button class="btn-icon" id="btnHelp" title="Справка">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -740,31 +740,46 @@ function isEAN13(s){return /^\d{13}$/.test(s.trim());}
 // ═══ LOOKUP: ищем код в Set по точному совпадению,
 // запасной вариант — только trailing trim (на случай если сканер добавляет CR)
 function findInCodes(raw){
-  if(S.czCodes.has(raw))return raw;
+  // 1) Прямое совпадение
+  if(S.czCodes.has(raw)) return raw;
+  // 2) Без trailing 
+	
   const t=stripTrailing(raw);
-  if(S.czCodes.has(t))return t;
+  if(S.czCodes.has(t)) return t;
+  // 3) Камера: ZXing может не передать  — ищем по коду без GS-символов
+  //    Перебираем czCodes и сравниваем с удалёнными GS
+  const rawNoGs = raw.replace(//g,'');
+  if(rawNoGs !== raw){
+    // в raw есть GS — значит ZXing передал их, файл мог не содержать
+    for(const code of S.czCodes){
+      if(code.replace(//g,'') === rawNoGs) return code;
+    }
+  } else {
+    // raw без GS — значит ZXing потерял их, ищем код из файла без GS
+    for(const code of S.czCodes){
+      if(code.replace(//g,'') === rawNoGs) return code;
+    }
+  }
   return null;
 }
 
-// ═══ SCAN INPUT v6.12 ═══
-// Mertech CL-2425 | HID-клавиатура | суффикс CR
+// ═══ SCAN INPUT v6.16 ═══
+// Поддержка: Windows + Android, HID-клавиатура, Bluetooth сканер, суффикс CR
 //
-// ПРОБЛЕМА ВСЕХ ПРЕДЫДУЩИХ ВЕРСИЙ:
-// При быстром сканировании CR приходит ПОСЛЕ того как начало следующего
-// кода уже попало в input.value. keydown Enter читает смешанное значение.
+// Разница платформ:
+//   Windows Chrome: GS (ASCII 29) → keypress charCode 29, НЕ попадает в value
+//   Android Chrome: GS → попадает напрямую в input.value как \x1d (keypress нет)
 //
-// РЕШЕНИЕ: не ждём CR как разделитель.
-// Детектируем конец кода по структуре DataMatrix ЧЗ:
-//   последний символ '=' (конец base64 подписи группы 92)
-//   + длина value ≥ 81 символ
-// Это срабатывает ТОЧНО в момент прихода последнего символа кода,
-// до того как CR или следующий код попадут в value.
-//
-// CR (keydown Enter) — дополнительный путь на случай если код не на '='
+// Алгоритм:
+//   input event (основной): читаем value, если есть \x1d — используем as-is
+//                            если нет \x1d — вставляем через gsPos (Windows-путь)
+//   keypress charCode 29:   Windows GS → запоминаем позицию
+//   keydown Enter:          CR суффикс → flush
+//   Детект конца кода:      length >= 81 && endsWith('=')
 
 let gsPos = [];
 
-// GS/FNC1 — только через keypress (WM_CHAR без WM_KEYDOWN)
+// ── Windows: GS через keypress ──────────────────────────────────────────
 scanInput.addEventListener('keypress', function(e) {
   var ch = e.charCode || e.which;
   if (ch === 29) {
@@ -773,48 +788,59 @@ scanInput.addEventListener('keypress', function(e) {
   }
 });
 
-// ОСНОВНОЙ ПУТЬ: детект конца кода в input event
+// ── ОСНОВНОЙ ПУТЬ: input event ──────────────────────────────────────────
 scanInput.addEventListener('input', function() {
   var val = scanInput.value;
   var len = val.length;
 
-  // Конец DataMatrix ЧЗ: последний символ '=' и длина >= 81
-  if (len >= 81 && val.charAt(len - 1) === '=') {
-    flush();
-    return;
-  }
+  // Android: GS попал в value напрямую как \x1d
+  // Если в value есть \x1d — используем строку как есть, gsPos не нужен
+  var hasGsInValue = val.indexOf('\x1d') !== -1;
 
-  // Страховка: CR/LF попал в value (Edge иногда делает это)
+  // Страховка: CR/LF попал в value
   if (val.indexOf('\r') !== -1 || val.indexOf('\n') !== -1) {
     var parts = val.split(/[\r\n]+/);
     var savedGs = gsPos.slice();
     reset();
     for (var i = 0; i < parts.length; i++) {
-      var p = parts[i].trim();
-      if (p.length >= 20) handleScan(insertGS(p, i === 0 ? savedGs : []));
+      var p = parts[i];  // не trim — GS может быть в начале/конце
+      if (p.replace(/\x1d/g,'').length >= 20) {
+        var result = hasGsInValue ? p : insertGS(p, i === 0 ? savedGs : []);
+        handleScan(result.trim());
+      }
     }
+    return;
+  }
+
+  // Детект конца кода: длина >= 81 и последний символ '='
+  // (считаем длину БЕЗ \x1d чтобы не сбить счётчик на Android)
+  var lenNoGs = val.replace(/\x1d/g,'').length;
+  if (lenNoGs >= 81 && val.charAt(len - 1) === '=') {
+    flush();
+    return;
   }
 });
 
-// ДОПОЛНИТЕЛЬНЫЙ ПУТЬ: CR суффикс (если код не заканчивается на '=')
+// ── CR суффикс ───────────────────────────────────────────────────────────
 scanInput.addEventListener('keydown', function(e) {
   if (e.key === 'Enter' || e.keyCode === 13) {
     e.preventDefault();
     e.stopPropagation();
-    if (scanInput.value.length >= 20) flush();
+    var lenNoGs = scanInput.value.replace(/\x1d/g,'').length;
+    if (lenNoGs >= 20) flush();
     return;
   }
   if (e.key === 'Escape') { reset(); }
 });
 
 function flush() {
-  var raw = buildRaw();
+  var val = scanInput.value;
+  // Если \x1d уже в value (Android) — берём as-is
+  // Если нет (Windows) — вставляем через gsPos
+  var raw = val.indexOf('\x1d') !== -1 ? val : insertGS(val, gsPos);
   reset();
-  if (raw.trim().length >= 20) handleScan(raw.trim());
-}
-
-function buildRaw() {
-  return insertGS(scanInput.value, gsPos);
+  raw = raw.trim();
+  if (raw.replace(/\x1d/g,'').length >= 20) handleScan(raw);
 }
 
 function insertGS(val, positions) {
@@ -834,6 +860,18 @@ function insertGS(val, positions) {
 function reset() {
   scanInput.value = '';
   gsPos = [];
+}
+
+// ── Android: скрываем виртуальную клавиатуру ────────────────────────────
+// inputmode="none" запрещает показ клавиатуры, но input остаётся активным
+// Применяем только на touch-устройствах чтобы не мешать ПК
+if ('ontouchstart' in window) {
+  scanInput.setAttribute('inputmode', 'none');
+  scanInput.setAttribute('readonly', 'true');
+  // readonly блокирует ввод — снимаем его но сохраняем inputmode
+  scanInput.addEventListener('focus', function() {
+    scanInput.removeAttribute('readonly');
+  });
 }
 function handleScan(raw){
   const s=stripTrailing(raw);
@@ -1094,14 +1132,13 @@ btnCam.addEventListener('click',()=>{
 async function startCamera(){
   try{
     if(typeof ZXing==='undefined'){
-      showFlash('err','📷','Камера недоступна','Библиотека ZXing не загружена — нет интернета или файл открыт локально','');return;
+      showFlash('err','📷','Камера недоступна','Библиотека ZXing не загружена — нет интернета','');return;
     }
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
       showFlash('err','📷','Камера недоступна',
-        'Браузер заблокировал доступ к камере. Откройте файл через https:// или localhost — не через file://','');
+        'Браузер заблокировал доступ к камере. Откройте через https:// — не через file://','');
       return;
     }
-    // Запрашиваем поток напрямую — задняя камера через facingMode environment
     const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}};
     const stream=await navigator.mediaDevices.getUserMedia(constraints);
     camVideo.srcObject=stream;
@@ -1109,9 +1146,28 @@ async function startCamera(){
     btnCam.classList.add('active');
     camActive=true;
     scanHint.textContent='Камера активна — наводите на DataMatrix';
-    codeReader=new ZXing.BrowserMultiFormatReader();
-    codeReader.decodeFromStream(stream,camVideo,result=>{
-      if(result){handleScan(result.getText());}
+
+    // Hints: включаем GS1 режим для корректной передачи FNC1/GS символов
+    const hints = new Map();
+    if(ZXing.DecodeHintType && ZXing.DecodeHintType.ASSUME_GS1){
+      hints.set(ZXing.DecodeHintType.ASSUME_GS1, true);
+    }
+    // Форматы: только DataMatrix и QR (быстрее чем MultiFormat)
+    if(ZXing.DecodeHintType && ZXing.BarcodeFormat){
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
+        ZXing.BarcodeFormat.DATA_MATRIX,
+        ZXing.BarcodeFormat.QR_CODE,
+        ZXing.BarcodeFormat.EAN_13
+      ]);
+    }
+    codeReader = hints.size
+      ? new ZXing.BrowserMultiFormatReader(hints)
+      : new ZXing.BrowserMultiFormatReader();
+
+    codeReader.decodeFromStream(stream, camVideo, (result, err)=>{
+      if(!result) return;
+      const raw = result.getText();
+      handleScan(normalizeCamCode(raw));
     });
   }catch(e){
     showFlash('err','📷','Ошибка камеры',e.message||'Нет доступа к камере','');
@@ -1128,6 +1184,18 @@ function stopCamera(){
   scanInput.focus();
 }
 
+// Нормализация кода из камеры:
+// ZXing может передать GS как  (правильно) или потерять его.
+// Мы пробуем найти код в czCodes с  и без — в findInCodes.
+// Дополнительно: убираем мусор в начале/конце.
+function normalizeCamCode(raw){
+  // ZXing иногда добавляет ] в начало (GS1 идентификатор)
+  let s = raw.replace(/^\]d[0-9]/, '').replace(/^\]C[0-9]/, '');
+  // Убираем trailing whitespace и управляющие кроме 
+  s = s.replace(/[
+	]+$/, '');
+  return s;
+}
 // ═══ REPORT ═══
 btnFinish.addEventListener('click',()=>{
   stopCamera();
