@@ -304,7 +304,7 @@ details>div{margin-top:6px;font-size:12px;color:var(--muted);}
   <div class="logo-icon">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><path d="M3 3h3v3H3zM3 10.5h3v3H3zM3 18h3v3H3zM10.5 3h3v3h-3zM10.5 10.5h3v3h-3zM10.5 18h3v3h-3zM18 3h3v3h-3zM18 10.5h3v3h-3zM18 18h3v3h-3z"/></svg>
   </div>
-  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.17</div></div>
+  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.15</div></div>
   <div class="hdr-right">
     <button class="btn-icon" id="btnHelp" title="Справка">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -472,7 +472,7 @@ details>div{margin-top:6px;font-size:12px;color:var(--muted);}
   <div class="help-dialog">
     <div class="help-hdr">
       <span style="font-size:18px">📖</span>
-      <strong style="font-size:14px">Справка — Сканер ЧЗ v6.17</strong>
+      <strong style="font-size:14px">Справка — Сканер ЧЗ v6.14</strong>
       <button class="help-close" id="helpClose">✕</button>
     </div>
     <div class="help-body">
@@ -637,20 +637,13 @@ const helpModal=$('helpModal'), helpBackdrop=$('helpBackdrop');
 
 // ═══ THEME ═══
 (()=>{
-  const btn=document.querySelector('[data-theme-toggle]'), root=document.documentElement;
-  const saved=localStorage.getItem('cz-theme');
-  const sys=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
-  let t=saved||sys;
+  const btn=document.querySelector('[data-theme-toggle]'),root=document.documentElement;
+  let t=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
   root.setAttribute('data-theme',t);
-  btn&&btn.addEventListener('click',()=>{
-    t=t==='dark'?'light':'dark';
-    root.setAttribute('data-theme',t);
-    localStorage.setItem('cz-theme',t);
-    btn.title=t==='dark'?'Светлая тема':'Тёмная тема';
-  });
-  if(btn) btn.title=t==='dark'?'Светлая тема':'Тёмная тема';
+  btn&&btn.addEventListener('click',()=>{t=t==='dark'?'light':'dark';root.setAttribute('data-theme',t);});
 })();
 
+// ═══ AUDIO ALARM ═══
 // ═══ ЗВУКИ ═══
 function _beep(freq, dur, vol, delay){
   try{
@@ -671,10 +664,17 @@ function playAlarm(){ // чужой — тройной высокий трево
   _beep(880,120,0.35); _beep(880,120,0.3,160); _beep(880,120,0.35,320);
 }
 
+function playOk(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.connect(g);g.connect(ctx.destination);
+    o.frequency.value=1200;g.gain.value=0.12;
+    o.start(ctx.currentTime);o.stop(ctx.currentTime+0.06);
+  }catch(e){}
+}
 
 // ═══ FILE ═══
-// Клик по зоне → открыть диалог выбора файла (нужно на Android и ПК)
-uploadZone.addEventListener('click', () => fileInput.click());
 uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('drag-over');});
 uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('drag-over'));
 uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('drag-over');e.dataTransfer.files[0]&&loadFile(e.dataTransfer.files[0]);});
@@ -763,23 +763,25 @@ function findInCodes(raw){
   return null;
 }
 
-// ═══ SCAN INPUT v6.17 ═══
-// Поддержка: Windows + Android, HID-клавиатура, Bluetooth сканер, суффикс CR
+// ═══ SCAN INPUT v6.12 ═══
+// Mertech CL-2425 | HID-клавиатура | суффикс CR
 //
-// Разница платформ:
-//   Windows Chrome: GS (ASCII 29) → keypress charCode 29, НЕ попадает в value
-//   Android Chrome: GS → попадает напрямую в input.value как \x1d (keypress нет)
+// ПРОБЛЕМА ВСЕХ ПРЕДЫДУЩИХ ВЕРСИЙ:
+// При быстром сканировании CR приходит ПОСЛЕ того как начало следующего
+// кода уже попало в input.value. keydown Enter читает смешанное значение.
 //
-// Алгоритм:
-//   input event (основной): читаем value, если есть \x1d — используем as-is
-//                            если нет \x1d — вставляем через gsPos (Windows-путь)
-//   keypress charCode 29:   Windows GS → запоминаем позицию
-//   keydown Enter:          CR суффикс → flush
-//   Детект конца кода:      length >= 81 && endsWith('=')
+// РЕШЕНИЕ: не ждём CR как разделитель.
+// Детектируем конец кода по структуре DataMatrix ЧЗ:
+//   последний символ '=' (конец base64 подписи группы 92)
+//   + длина value ≥ 81 символ
+// Это срабатывает ТОЧНО в момент прихода последнего символа кода,
+// до того как CR или следующий код попадут в value.
+//
+// CR (keydown Enter) — дополнительный путь на случай если код не на '='
 
 let gsPos = [];
 
-// ── Windows: GS через keypress ──────────────────────────────────────────
+// GS/FNC1 — только через keypress (WM_CHAR без WM_KEYDOWN)
 scanInput.addEventListener('keypress', function(e) {
   var ch = e.charCode || e.which;
   if (ch === 29) {
@@ -788,46 +790,35 @@ scanInput.addEventListener('keypress', function(e) {
   }
 });
 
-// ── ОСНОВНОЙ ПУТЬ: input event ──────────────────────────────────────────
+// ОСНОВНОЙ ПУТЬ: детект конца кода в input event
 scanInput.addEventListener('input', function() {
   var val = scanInput.value;
   var len = val.length;
 
-  // Android: GS попал в value напрямую как \x1d
-  // Если в value есть \x1d — используем строку как есть, gsPos не нужен
-  var hasGsInValue = val.indexOf('\x1d') !== -1;
+  // Конец DataMatrix ЧЗ: последний символ '=' и длина >= 81
+  if (len >= 81 && val.charAt(len - 1) === '=') {
+    flush();
+    return;
+  }
 
-  // Страховка: CR/LF попал в value
+  // Страховка: CR/LF попал в value (Edge иногда делает это)
   if (val.indexOf('\r') !== -1 || val.indexOf('\n') !== -1) {
     var parts = val.split(/[\r\n]+/);
     var savedGs = gsPos.slice();
     reset();
     for (var i = 0; i < parts.length; i++) {
-      var p = parts[i];  // не trim — GS может быть в начале/конце
-      if (p.replace(/\x1d/g,'').length >= 20) {
-        var result = hasGsInValue ? p : insertGS(p, i === 0 ? savedGs : []);
-        handleScan(result.trim());
-      }
+      var p = parts[i].trim();
+      if (p.length >= 20) handleScan(insertGS(p, i === 0 ? savedGs : []));
     }
-    return;
-  }
-
-  // Детект конца кода: длина >= 81 и последний символ '='
-  // (считаем длину БЕЗ \x1d чтобы не сбить счётчик на Android)
-  var lenNoGs = val.replace(/\x1d/g,'').length;
-  if (lenNoGs >= 81 && val.charAt(len - 1) === '=') {
-    flush();
-    return;
   }
 });
 
-// ── CR суффикс ───────────────────────────────────────────────────────────
+// ДОПОЛНИТЕЛЬНЫЙ ПУТЬ: CR суффикс (если код не заканчивается на '=')
 scanInput.addEventListener('keydown', function(e) {
   if (e.key === 'Enter' || e.keyCode === 13) {
     e.preventDefault();
     e.stopPropagation();
-    var lenNoGs = scanInput.value.replace(/\x1d/g,'').length;
-    if (lenNoGs >= 20) flush();
+    if (scanInput.value.length >= 20) flush();
     return;
   }
   if (e.key === 'Escape') { reset(); }
@@ -835,12 +826,14 @@ scanInput.addEventListener('keydown', function(e) {
 
 function flush() {
   var val = scanInput.value;
-  // Если \x1d уже в value (Android) — берём as-is
-  // Если нет (Windows) — вставляем через gsPos
-  var raw = val.indexOf('\x1d') !== -1 ? val : insertGS(val, gsPos);
+  var raw = (val.indexOf('\x1d') !== -1) ? val : insertGS(val, gsPos);
   reset();
   raw = raw.trim();
   if (raw.replace(/\x1d/g,'').length >= 20) handleScan(raw);
+}
+
+function buildRaw() {
+  return insertGS(scanInput.value, gsPos);
 }
 
 function insertGS(val, positions) {
@@ -862,17 +855,15 @@ function reset() {
   gsPos = [];
 }
 
-// ── Android: скрываем виртуальную клавиатуру ────────────────────────────
-// inputmode="none" запрещает показ клавиатуры, но input остаётся активным
-// Применяем только на touch-устройствах чтобы не мешать ПК
+// Android: скрываем виртуальную клавиатуру
 if ('ontouchstart' in window) {
   scanInput.setAttribute('inputmode', 'none');
   scanInput.setAttribute('readonly', 'true');
-  // readonly блокирует ввод — снимаем его но сохраняем inputmode
   scanInput.addEventListener('focus', function() {
     scanInput.removeAttribute('readonly');
   });
 }
+
 function handleScan(raw){
   const s=stripTrailing(raw);
   // Тихо игнорируем EAN-13
@@ -1304,7 +1295,6 @@ btnReset.addEventListener('click',()=>{
   S.czCodes.clear();S.gtinMap.clear();S.scanned.clear();S.skuDates.clear();
   S.errors=0;S.logRows=0;
   lsClear(); // очищаем localStorage
-  const rb=document.getElementById('restoreBanner');if(rb)rb.remove();
   fileLoaded.classList.remove('show');fileInput.value='';
   infoBox.classList.remove('show');
   dateToggleRow.classList.remove('show');
@@ -1443,8 +1433,8 @@ function lsShowRestoreBanner(fileName){
     const ageStr = age < 60 ? age+'мин назад' : age < 1440 ? Math.round(age/60)+'ч назад' : Math.round(age/1440)+'д назад';
     const isActive = name === fileName;
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--surface);cursor:pointer;' + (isActive?'border:1px solid var(--primary);':'border:1px solid transparent;');
-    row.innerHTML = `<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div><div style="font-size:11px;color:var(--muted)">${data.scanned.length} принято · ${ageStr}</div></div><button style="font-size:11px;padding:3px 8px;border-radius:5px;background:var(--primary);color:#fff;border:none;cursor:pointer">Восстановить</button><button style="font-size:11px;padding:3px 6px;border-radius:5px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);cursor:pointer">✕</button>`;
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--surface);cursor:pointer;' + (isActive?'border:1px solid var(--accent);':'border:1px solid transparent;');
+    row.innerHTML = `<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div><div style="font-size:11px;color:var(--muted)">${data.scanned.length} принято · ${ageStr}</div></div><button style="font-size:11px;padding:3px 8px;border-radius:5px;background:var(--accent);color:#fff;border:none;cursor:pointer">Восстановить</button><button style="font-size:11px;padding:3px 6px;border-radius:5px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);cursor:pointer">✕</button>`;
     row.querySelectorAll('button')[0].addEventListener('click', e => {
       e.stopPropagation();
       // Сначала загружаем файл если это не текущий
