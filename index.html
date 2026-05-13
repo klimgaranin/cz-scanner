@@ -304,7 +304,7 @@ details>div{margin-top:6px;font-size:12px;color:var(--muted);}
   <div class="logo-icon">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><path d="M3 3h3v3H3zM3 10.5h3v3H3zM3 18h3v3H3zM10.5 3h3v3h-3zM10.5 10.5h3v3h-3zM10.5 18h3v3h-3zM18 3h3v3h-3zM18 10.5h3v3h-3zM18 18h3v3h-3z"/></svg>
   </div>
-  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.15</div></div>
+  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.14</div></div>
   <div class="hdr-right">
     <button class="btn-icon" id="btnHelp" title="Справка">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -740,26 +740,9 @@ function isEAN13(s){return /^\d{13}$/.test(s.trim());}
 // ═══ LOOKUP: ищем код в Set по точному совпадению,
 // запасной вариант — только trailing trim (на случай если сканер добавляет CR)
 function findInCodes(raw){
-  // 1) Прямое совпадение
-  if(S.czCodes.has(raw)) return raw;
-  // 2) Без trailing 
-	
+  if(S.czCodes.has(raw))return raw;
   const t=stripTrailing(raw);
-  if(S.czCodes.has(t)) return t;
-  // 3) Камера: ZXing может не передать  — ищем по коду без GS-символов
-  //    Перебираем czCodes и сравниваем с удалёнными GS
-  const rawNoGs = raw.replace(//g,'');
-  if(rawNoGs !== raw){
-    // в raw есть GS — значит ZXing передал их, файл мог не содержать
-    for(const code of S.czCodes){
-      if(code.replace(//g,'') === rawNoGs) return code;
-    }
-  } else {
-    // raw без GS — значит ZXing потерял их, ищем код из файла без GS
-    for(const code of S.czCodes){
-      if(code.replace(//g,'') === rawNoGs) return code;
-    }
-  }
+  if(S.czCodes.has(t))return t;
   return null;
 }
 
@@ -825,11 +808,9 @@ scanInput.addEventListener('keydown', function(e) {
 });
 
 function flush() {
-  var val = scanInput.value;
-  var raw = (val.indexOf('\x1d') !== -1) ? val : insertGS(val, gsPos);
+  var raw = buildRaw();
   reset();
-  raw = raw.trim();
-  if (raw.replace(/\x1d/g,'').length >= 20) handleScan(raw);
+  if (raw.trim().length >= 20) handleScan(raw.trim());
 }
 
 function buildRaw() {
@@ -854,16 +835,6 @@ function reset() {
   scanInput.value = '';
   gsPos = [];
 }
-
-// Android: скрываем виртуальную клавиатуру
-if ('ontouchstart' in window) {
-  scanInput.setAttribute('inputmode', 'none');
-  scanInput.setAttribute('readonly', 'true');
-  scanInput.addEventListener('focus', function() {
-    scanInput.removeAttribute('readonly');
-  });
-}
-
 function handleScan(raw){
   const s=stripTrailing(raw);
   // Тихо игнорируем EAN-13
@@ -1123,13 +1094,14 @@ btnCam.addEventListener('click',()=>{
 async function startCamera(){
   try{
     if(typeof ZXing==='undefined'){
-      showFlash('err','📷','Камера недоступна','Библиотека ZXing не загружена — нет интернета','');return;
+      showFlash('err','📷','Камера недоступна','Библиотека ZXing не загружена — нет интернета или файл открыт локально','');return;
     }
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
       showFlash('err','📷','Камера недоступна',
-        'Браузер заблокировал доступ к камере. Откройте через https:// — не через file://','');
+        'Браузер заблокировал доступ к камере. Откройте файл через https:// или localhost — не через file://','');
       return;
     }
+    // Запрашиваем поток напрямую — задняя камера через facingMode environment
     const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}};
     const stream=await navigator.mediaDevices.getUserMedia(constraints);
     camVideo.srcObject=stream;
@@ -1137,28 +1109,9 @@ async function startCamera(){
     btnCam.classList.add('active');
     camActive=true;
     scanHint.textContent='Камера активна — наводите на DataMatrix';
-
-    // Hints: включаем GS1 режим для корректной передачи FNC1/GS символов
-    const hints = new Map();
-    if(ZXing.DecodeHintType && ZXing.DecodeHintType.ASSUME_GS1){
-      hints.set(ZXing.DecodeHintType.ASSUME_GS1, true);
-    }
-    // Форматы: только DataMatrix и QR (быстрее чем MultiFormat)
-    if(ZXing.DecodeHintType && ZXing.BarcodeFormat){
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
-        ZXing.BarcodeFormat.DATA_MATRIX,
-        ZXing.BarcodeFormat.QR_CODE,
-        ZXing.BarcodeFormat.EAN_13
-      ]);
-    }
-    codeReader = hints.size
-      ? new ZXing.BrowserMultiFormatReader(hints)
-      : new ZXing.BrowserMultiFormatReader();
-
-    codeReader.decodeFromStream(stream, camVideo, (result, err)=>{
-      if(!result) return;
-      const raw = result.getText();
-      handleScan(normalizeCamCode(raw));
+    codeReader=new ZXing.BrowserMultiFormatReader();
+    codeReader.decodeFromStream(stream,camVideo,result=>{
+      if(result){handleScan(result.getText());}
     });
   }catch(e){
     showFlash('err','📷','Ошибка камеры',e.message||'Нет доступа к камере','');
@@ -1175,18 +1128,6 @@ function stopCamera(){
   scanInput.focus();
 }
 
-// Нормализация кода из камеры:
-// ZXing может передать GS как  (правильно) или потерять его.
-// Мы пробуем найти код в czCodes с  и без — в findInCodes.
-// Дополнительно: убираем мусор в начале/конце.
-function normalizeCamCode(raw){
-  // ZXing иногда добавляет ] в начало (GS1 идентификатор)
-  let s = raw.replace(/^\]d[0-9]/, '').replace(/^\]C[0-9]/, '');
-  // Убираем trailing whitespace и управляющие кроме 
-  s = s.replace(/[
-	]+$/, '');
-  return s;
-}
 // ═══ REPORT ═══
 btnFinish.addEventListener('click',()=>{
   stopCamera();
