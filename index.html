@@ -659,7 +659,6 @@ function _beep(freq, dur, vol, delay){
     o.stop(ctx.currentTime+(delay||0)/1000+dur/1000+0.05);
   }catch(e){}
 }
-function playOk(){    _beep(1046,80,0.25);  }               // C6 — короткий высокий «пик»
 function playDup(){   _beep(660,120,0.2); _beep(440,120,0.2,140); } // дубль — два средних
 function playAlarm(){ // чужой — тройной высокий тревожный (как было)
   _beep(880,120,0.35); _beep(880,120,0.3,160); _beep(880,120,0.35,320);
@@ -778,12 +777,6 @@ scanInput.addEventListener('keypress', function(e) {
 scanInput.addEventListener('input', function() {
   var val = scanInput.value;
   var len = val.length;
-
-  // Fix 2a: Android — GS уже в value, ждём '=' или длину
-  if (val.indexOf('\x1d') !== -1 && len >= 81 && val.charAt(len - 1) === '=') {
-    flush();
-    return;
-  }
 
   // Конец DataMatrix ЧЗ: последний символ '=' и длина >= 81
   if (len >= 81 && val.charAt(len - 1) === '=') {
