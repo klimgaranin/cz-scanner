@@ -304,7 +304,7 @@ details>div{margin-top:6px;font-size:12px;color:var(--muted);}
   <div class="logo-icon">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><path d="M3 3h3v3H3zM3 10.5h3v3H3zM3 18h3v3H3zM10.5 3h3v3h-3zM10.5 10.5h3v3h-3zM10.5 18h3v3h-3zM18 3h3v3h-3zM18 10.5h3v3h-3zM18 18h3v3h-3z"/></svg>
   </div>
-  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.16</div></div>
+  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.17</div></div>
   <div class="hdr-right">
     <button class="btn-icon" id="btnHelp" title="Справка">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -472,7 +472,7 @@ details>div{margin-top:6px;font-size:12px;color:var(--muted);}
   <div class="help-dialog">
     <div class="help-hdr">
       <span style="font-size:18px">📖</span>
-      <strong style="font-size:14px">Справка — Сканер ЧЗ v6.14</strong>
+      <strong style="font-size:14px">Справка — Сканер ЧЗ v6.17</strong>
       <button class="help-close" id="helpClose">✕</button>
     </div>
     <div class="help-body">
@@ -637,13 +637,20 @@ const helpModal=$('helpModal'), helpBackdrop=$('helpBackdrop');
 
 // ═══ THEME ═══
 (()=>{
-  const btn=document.querySelector('[data-theme-toggle]'),root=document.documentElement;
-  let t=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+  const btn=document.querySelector('[data-theme-toggle]'), root=document.documentElement;
+  const saved=localStorage.getItem('cz-theme');
+  const sys=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+  let t=saved||sys;
   root.setAttribute('data-theme',t);
-  btn&&btn.addEventListener('click',()=>{t=t==='dark'?'light':'dark';root.setAttribute('data-theme',t);});
+  btn&&btn.addEventListener('click',()=>{
+    t=t==='dark'?'light':'dark';
+    root.setAttribute('data-theme',t);
+    localStorage.setItem('cz-theme',t);
+    btn.title=t==='dark'?'Светлая тема':'Тёмная тема';
+  });
+  if(btn) btn.title=t==='dark'?'Светлая тема':'Тёмная тема';
 })();
 
-// ═══ AUDIO ALARM ═══
 // ═══ ЗВУКИ ═══
 function _beep(freq, dur, vol, delay){
   try{
@@ -664,17 +671,10 @@ function playAlarm(){ // чужой — тройной высокий трево
   _beep(880,120,0.35); _beep(880,120,0.3,160); _beep(880,120,0.35,320);
 }
 
-function playOk(){
-  try{
-    const ctx=new(window.AudioContext||window.webkitAudioContext)();
-    const o=ctx.createOscillator(), g=ctx.createGain();
-    o.connect(g);g.connect(ctx.destination);
-    o.frequency.value=1200;g.gain.value=0.12;
-    o.start(ctx.currentTime);o.stop(ctx.currentTime+0.06);
-  }catch(e){}
-}
 
 // ═══ FILE ═══
+// Клик по зоне → открыть диалог выбора файла (нужно на Android и ПК)
+uploadZone.addEventListener('click', () => fileInput.click());
 uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('drag-over');});
 uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('drag-over'));
 uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('drag-over');e.dataTransfer.files[0]&&loadFile(e.dataTransfer.files[0]);});
@@ -763,7 +763,7 @@ function findInCodes(raw){
   return null;
 }
 
-// ═══ SCAN INPUT v6.16 ═══
+// ═══ SCAN INPUT v6.17 ═══
 // Поддержка: Windows + Android, HID-клавиатура, Bluetooth сканер, суффикс CR
 //
 // Разница платформ:
@@ -1304,6 +1304,7 @@ btnReset.addEventListener('click',()=>{
   S.czCodes.clear();S.gtinMap.clear();S.scanned.clear();S.skuDates.clear();
   S.errors=0;S.logRows=0;
   lsClear(); // очищаем localStorage
+  const rb=document.getElementById('restoreBanner');if(rb)rb.remove();
   fileLoaded.classList.remove('show');fileInput.value='';
   infoBox.classList.remove('show');
   dateToggleRow.classList.remove('show');
@@ -1442,8 +1443,8 @@ function lsShowRestoreBanner(fileName){
     const ageStr = age < 60 ? age+'мин назад' : age < 1440 ? Math.round(age/60)+'ч назад' : Math.round(age/1440)+'д назад';
     const isActive = name === fileName;
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--surface);cursor:pointer;' + (isActive?'border:1px solid var(--accent);':'border:1px solid transparent;');
-    row.innerHTML = `<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div><div style="font-size:11px;color:var(--muted)">${data.scanned.length} принято · ${ageStr}</div></div><button style="font-size:11px;padding:3px 8px;border-radius:5px;background:var(--accent);color:#fff;border:none;cursor:pointer">Восстановить</button><button style="font-size:11px;padding:3px 6px;border-radius:5px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);cursor:pointer">✕</button>`;
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--surface);cursor:pointer;' + (isActive?'border:1px solid var(--primary);':'border:1px solid transparent;');
+    row.innerHTML = `<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div><div style="font-size:11px;color:var(--muted)">${data.scanned.length} принято · ${ageStr}</div></div><button style="font-size:11px;padding:3px 8px;border-radius:5px;background:var(--primary);color:#fff;border:none;cursor:pointer">Восстановить</button><button style="font-size:11px;padding:3px 6px;border-radius:5px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);cursor:pointer">✕</button>`;
     row.querySelectorAll('button')[0].addEventListener('click', e => {
       e.stopPropagation();
       // Сначала загружаем файл если это не текущий
