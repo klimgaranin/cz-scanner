@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Сканер ЧЗ v6</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root,[data-theme="light"]{
+  --bg:#f4f4f2;--surface:#fff;--surface2:#f8f8f7;
+  --border:#e0e0dc;--divider:#ebebea;
+  --text:#1a1a18;--muted:#6b6b68;--faint:#b0b0ac;
+  --primary:#006b6f;--primary-h:#005054;--primary-light:#dff0f0;
+  --success:#2a7a2a;--success-bg:#edf7ed;--success-b:#bde0bd;
+  --error:#c0392b;--error-bg:#fdf0ef;--error-b:#f5c6c2;
+  --warning:#9a5f00;--warning-bg:#fff8e6;--warning-b:#fde8a8;
+  --info:#005f8a;--info-bg:#e8f4fb;--info-b:#b0d8ef;
+  --shadow:0 1px 3px rgba(0,0,0,.07),0 4px 12px rgba(0,0,0,.05);
+  --r:10px;--rs:6px;--font:'Inter',system-ui,sans-serif;
+}
+[data-theme="dark"]{
+  --bg:#141413;--surface:#1d1d1b;--surface2:#232321;
+  --border:#333330;--divider:#2a2a28;
+  --text:#e8e8e5;--muted:#888885;--faint:#555552;
+  --primary:#3da3a8;--primary-h:#2e8a8f;--primary-light:#1a3535;
+  --success:#5cad5c;--success-bg:#1a2e1a;--success-b:#2a4a2a;
+  --error:#e06050;--error-bg:#2e1a18;--error-b:#4a2a25;
+  --warning:#d4a030;--warning-bg:#2a2210;--warning-b:#4a3a15;
+  --info:#4ab0d4;--info-bg:#152030;--info-b:#1e4060;
+  --shadow:0 1px 3px rgba(0,0,0,.3),0 4px 12px rgba(0,0,0,.4);
+}
+html{-webkit-font-smoothing:antialiased;height:100%;}
+body{font-family:var(--font);font-size:14px;color:var(--text);background:var(--bg);min-height:100dvh;line-height:1.5;transition:background .2s,color .2s;}
+
+/* HEADER */
+.hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:200;box-shadow:var(--shadow);}
+.logo-icon{width:30px;height:30px;background:var(--primary);border-radius:var(--rs);display:grid;place-items:center;flex-shrink:0;}
+.logo-text{font-size:15px;font-weight:700;}
+.logo-sub{font-size:11px;color:var(--muted);margin-top:-2px;}
+.hdr-right{margin-left:auto;display:flex;gap:6px;}
+.btn-icon{width:36px;height:36px;border-radius:var(--rs);border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;display:grid;place-items:center;transition:all .15s;-webkit-tap-highlight-color:transparent;}
+.btn-icon:hover{color:var(--text);background:var(--bg);}
+.btn-icon:active{transform:scale(.93);}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:300px 1fr;min-height:calc(100dvh - 52px);}
+
+/* SIDEBAR */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+.sec-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px;}
+
+/* UPLOAD */
+.upload-zone{border:2px dashed var(--border);border-radius:var(--r);padding:14px 12px;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--primary);background:var(--primary-light);}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-zone p{font-size:12px;color:var(--muted);line-height:1.4;}
+.upload-zone strong{color:var(--primary);}
+.file-loaded{display:none;background:var(--success-bg);border:1px solid var(--success-b);border-radius:var(--r);padding:7px 12px;font-size:12px;color:var(--success);gap:6px;align-items:flex-start;}
+.file-loaded.show{display:flex;}
+
+/* INFO */
+.info-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;display:none;flex-direction:column;gap:5px;}
+.info-box.show{display:flex;}
+.info-row{display:flex;justify-content:space-between;align-items:baseline;}
+.info-lbl{font-size:11px;color:var(--muted);}
+.info-val{font-size:12px;font-weight:600;}
+
+/* TOGGLE ROW */
+.toggle-row{display:none;align-items:center;gap:10px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);}
+.toggle-row.show{display:flex;}
+.toggle-lbl{font-size:12px;flex:1;}
+.toggle{position:relative;width:36px;height:20px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;position:absolute;}
+.toggle-track{position:absolute;inset:0;background:var(--border);border-radius:99px;cursor:pointer;transition:background .2s;}
+.toggle input:checked+.toggle-track{background:var(--primary);}
+.toggle-thumb{position:absolute;top:3px;left:3px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle input:checked~.toggle-thumb{transform:translateX(16px);}
+
+/* SKU SECTION */
+.sku-section{display:none;flex-direction:column;gap:6px;}
+.sku-section.show{display:flex;}
+.sku-sec-hdr{display:flex;align-items:center;gap:6px;}
+.sku-filter-btn{font-size:10px;padding:2px 8px;border-radius:99px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;}
+.sku-filter-btn.active{background:var(--primary-light);border-color:var(--primary);color:var(--primary);}
+.sku-cards{display:flex;flex-direction:column;gap:5px;}
+.sku-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.sku-card.done-card{opacity:.55;}
+.sku-card-dim{opacity:.4;filter:grayscale(.4);}
+.sku-card-hdr{display:flex;align-items:center;gap:8px;padding:7px 10px;}
+.sku-ean{font-family:monospace;font-size:12px;font-weight:700;flex:1;word-break:break-all;}
+.sku-prog-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+.sku-prog-txt{font-size:11px;font-weight:600;white-space:nowrap;}
+.sku-prog-txt.done{color:var(--success);}
+.sku-prog-txt.partial{color:var(--warning);}
+.sku-mini-bar{width:36px;height:4px;background:var(--divider);border-radius:99px;overflow:hidden;}
+.sku-mini-fill{height:100%;background:var(--primary);border-radius:99px;transition:width .3s;}
+.sku-dates-wrap{border-top:1px solid var(--divider);padding:5px 10px;display:flex;flex-direction:column;gap:3px;}
+.date-option{display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:var(--rs);cursor:pointer;transition:background .15s;border:1px solid transparent;}
+.date-option:hover{background:var(--surface);}
+.date-option.active{background:var(--primary-light);border-color:var(--primary);}
+.date-radio{width:12px;height:12px;border:2px solid var(--border);border-radius:50%;flex-shrink:0;display:grid;place-items:center;}
+.date-option.active .date-radio{border-color:var(--primary);}
+.date-radio-dot{width:5px;height:5px;border-radius:50%;background:var(--primary);display:none;}
+.date-option.active .date-radio-dot{display:block;}
+.date-opt-val{font-size:11px;font-family:monospace;flex:1;}
+.date-opt-val.active-v{color:var(--primary);font-weight:600;}
+.date-active-lbl{font-size:10px;color:var(--primary);font-weight:600;background:var(--primary-light);padding:1px 4px;border-radius:3px;display:none;}
+.date-option.active .date-active-lbl{display:inline;}
+.date-del{font-size:11px;color:var(--faint);cursor:pointer;padding:2px 4px;border-radius:3px;transition:all .15s;}
+.date-del:hover{color:var(--error);background:var(--error-bg);}
+.date-add-btn{display:flex;align-items:center;gap:4px;padding:4px 6px;font-size:11px;color:var(--primary);cursor:pointer;border:none;background:none;border-radius:var(--rs);transition:background .15s;width:100%;font-family:var(--font);}
+.date-add-btn:hover{background:var(--primary-light);}
+.no-date-hint{font-size:11px;color:var(--faint);padding:2px 6px;}
+
+/* PROGRESS */
+.prog-block{display:none;flex-direction:column;gap:8px;}
+.prog-block.show{display:flex;}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;}
+.stat{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:8px 5px;text-align:center;}
+.stat-n{font-size:20px;font-weight:700;line-height:1.1;}
+.stat-l{font-size:10px;color:var(--muted);margin-top:1px;}
+.stat.ok .stat-n{color:var(--success);}
+.stat.bad .stat-n{color:var(--error);}
+.stat.tot .stat-n{color:var(--primary);}
+.stat.rem .stat-n{color:var(--warning);}
+.pbar{height:6px;background:var(--divider);border-radius:99px;overflow:hidden;}
+.pbar-fill{height:100%;background:var(--primary);border-radius:99px;transition:width .3s;}
+
+/* SIDEBAR BTNS */
+.sidebar-btns{margin-top:auto;display:flex;flex-direction:column;gap:6px;padding-top:8px;}
+.btn-primary{padding:10px 16px;background:var(--primary);color:#fff;border:none;border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;width:100%;transition:background .15s;-webkit-tap-highlight-color:transparent;}
+.btn-primary:hover{background:var(--primary-h);}
+.btn-primary:active{transform:scale(.98);}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;}
+.btn-ghost{padding:9px;background:none;border:1px solid var(--error-b);color:var(--error);border-radius:var(--rs);font-size:12px;cursor:pointer;width:100%;display:none;transition:all .15s;}
+.btn-ghost.show{display:block;}
+.btn-ghost:hover{background:var(--error-bg);}
+
+/* MAIN */
+.main{padding:16px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;}
+.placeholder{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:40px;color:var(--faint);}
+.placeholder p{font-size:13px;max-width:26ch;}
+
+/* REMAINING BANNER */
+.remain-banner{display:none;background:var(--warning-bg);border:1px solid var(--warning-b);border-radius:var(--r);padding:10px 16px;align-items:center;gap:12px;}
+.remain-banner.show{display:flex;}
+.remain-big{font-size:28px;font-weight:700;color:var(--warning);line-height:1;}
+.remain-lbl{font-size:12px;color:var(--warning);}
+
+/* SCAN PANEL */
+.scan-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);display:none;overflow:hidden;}
+.scan-panel.show{display:block;}
+.scan-hdr{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.scan-dot{width:9px;height:9px;border-radius:50%;background:var(--faint);flex-shrink:0;}
+.scan-dot.active{background:var(--success);box-shadow:0 0 6px rgba(42,122,42,.6);animation:pulse 1.4s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.scan-hdr-title{font-size:13px;font-weight:600;}
+.scan-hdr-hint{font-size:11px;color:var(--muted);margin-left:auto;}
+.scan-body{padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+.scan-row{display:flex;gap:8px;}
+.scan-input{flex:1;padding:12px 14px;font-size:14px;font-family:monospace;border:2px solid var(--border);border-radius:var(--rs);background:var(--bg);color:var(--text);outline:none;transition:border-color .2s,box-shadow .2s;}
+.scan-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in oklch,var(--primary) 15%,transparent);background:var(--surface);}
+.scan-input::placeholder{color:var(--faint);font-family:var(--font);font-size:12px;}
+.scan-input:disabled{opacity:.4;cursor:not-allowed;}
+.btn-cam{padding:12px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:var(--rs);cursor:pointer;color:var(--muted);white-space:nowrap;font-size:12px;font-weight:600;font-family:var(--font);transition:all .15s;display:flex;align-items:center;gap:5px;-webkit-tap-highlight-color:transparent;}
+.btn-cam:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light);}
+.btn-cam.active{border-color:var(--primary);color:var(--primary);background:var(--primary-light);}
+
+/* CAMERA */
+.cam-wrap{display:none;border-radius:var(--rs);overflow:hidden;background:#000;position:relative;}
+.cam-wrap.show{display:block;}
+.cam-wrap video{width:100%;display:block;max-height:240px;object-fit:cover;}
+.cam-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.cam-viewfinder{width:200px;height:200px;border:2px solid rgba(255,255,255,.6);border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.4);}
+
+/* FLASH */
+.flash{padding:10px 14px;border-radius:var(--rs);display:none;align-items:flex-start;gap:10px;font-size:13px;font-weight:500;animation:slideIn .18s ease;}
+@keyframes slideIn{from{transform:translateY(-5px);opacity:0}to{transform:translateY(0);opacity:1}}
+.flash.ok  {display:flex;background:var(--success-bg);border:1px solid var(--success-b);color:var(--success);}
+.flash.err {display:flex;background:var(--error-bg);  border:1px solid var(--error-b);  color:var(--error);}
+.flash.warn{display:flex;background:var(--warning-bg);border:1px solid var(--warning-b);color:var(--warning);}
+.flash.info{display:flex;background:var(--info-bg);   border:1px solid var(--info-b);   color:var(--info);}
+.flash-icon{font-size:16px;flex-shrink:0;line-height:1.4;}
+.flash-msg strong{display:block;}
+.flash-detail{font-size:11px;font-family:monospace;margin-top:3px;opacity:.8;word-break:break-all;}
+
+/* LOG */
+.log-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);display:none;overflow:hidden;}
+.log-wrap.show{display:block;}
+.log-hdr{padding:9px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.log-hdr-title{font-size:13px;font-weight:600;}
+.log-count{font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 7px;border-radius:99px;}
+.log-clear{margin-left:auto;font-size:11px;color:var(--muted);cursor:pointer;padding:3px 8px;border:1px solid var(--border);border-radius:var(--rs);background:none;transition:all .15s;}
+.log-clear:hover{color:var(--error);border-color:var(--error-b);}
+.tbl-wrap{max-height:300px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{padding:6px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--surface2);border-bottom:1px solid var(--border);text-align:left;position:sticky;top:0;z-index:1;}
+tbody tr{border-bottom:1px solid var(--divider);transition:background .1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--surface2);}
+tbody td{padding:7px 10px;vertical-align:middle;}
+.td-s{width:22px;text-align:center;}
+.td-cz{font-family:monospace;font-size:11px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.td-ean{font-family:monospace;font-size:11px;}
+.td-date{font-size:11px;color:var(--muted);white-space:nowrap;}
+.td-msg.ok-t{color:var(--success);}
+.td-msg.err-t{color:var(--error);}
+.td-msg.warn-t{color:var(--warning);}
+.td-time{font-size:11px;color:var(--faint);white-space:nowrap;}
+.log-empty-row td{padding:28px;text-align:center;color:var(--faint);}
+.td-del{width:28px;text-align:center;}
+.btn-del-row{width:22px;height:22px;border:none;background:none;cursor:pointer;border-radius:4px;color:var(--faint);font-size:14px;display:grid;place-items:center;transition:all .15s;padding:0;}
+.btn-del-row:hover{color:var(--error);background:var(--error-bg);}
+
+/* REPORT */
+.report{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);display:none;overflow:hidden;}
+.report.show{display:block;}
+.report-hdr{padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.report-hdr-title{font-size:13px;font-weight:600;}
+.btn-dl{margin-left:auto;padding:7px 14px;background:var(--primary);color:#fff;border:none;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;transition:background .15s;}
+.btn-dl:hover{background:var(--primary-h);}
+.report-body{padding:14px;display:flex;flex-direction:column;gap:12px;}
+.result-block{padding:11px 13px;border-radius:var(--rs);border:1px solid;display:flex;gap:12px;align-items:flex-start;}
+.result-block.success{background:var(--success-bg);border-color:var(--success-b);}
+.result-block.failure{background:var(--error-bg);border-color:var(--error-b);}
+.result-icon{font-size:22px;}
+.result-text strong{display:block;font-size:14px;margin-bottom:3px;}
+.result-text p{font-size:12px;color:var(--muted);}
+.missed-wrap{display:flex;flex-wrap:wrap;gap:5px;}
+.missed-tag{padding:2px 8px;background:var(--error-bg);border:1px solid var(--error-b);border-radius:var(--rs);font-size:11px;font-family:monospace;color:var(--error);}
+
+/* DATE MODAL */
+.date-modal{display:none;position:fixed;inset:0;z-index:500;align-items:center;justify-content:center;padding:16px;}
+.date-modal.show{display:flex;}
+.date-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5);}
+.date-dialog{position:relative;z-index:1;background:var(--surface);border-radius:var(--r);width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25);animation:popIn .18s ease;overflow:hidden;}
+@keyframes popIn{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+.modal-hdr{padding:14px 16px 10px;border-bottom:1px solid var(--border);}
+.modal-hdr h3{font-size:15px;font-weight:700;}
+.modal-hdr p{font-size:12px;color:var(--muted);margin-top:2px;}
+.modal-body{padding:12px 16px;}
+.date-ean-badge{display:inline-block;background:var(--primary-light);color:var(--primary);font-family:monospace;font-size:12px;font-weight:700;padding:3px 10px;border-radius:var(--rs);margin-bottom:10px;word-break:break-all;}
+.date-field{padding:11px 13px;border:1px solid var(--border);border-radius:var(--rs);background:var(--bg);color:var(--text);font-size:16px;font-family:var(--font);width:100%;outline:none;transition:border-color .15s;}
+.date-field:focus{border-color:var(--primary);}
+.date-actions{display:flex;gap:8px;margin-top:12px;}
+.date-ok{flex:1;padding:11px;background:var(--primary);color:#fff;border:none;border-radius:var(--rs);font-size:14px;font-weight:600;cursor:pointer;transition:background .15s;}
+.date-ok:hover{background:var(--primary-h);}
+.date-skip{padding:11px 16px;background:none;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;color:var(--muted);cursor:pointer;}
+
+/* HELP MODAL */
+.help-modal{display:none;position:fixed;inset:0;z-index:600;align-items:center;justify-content:center;padding:12px;}
+.help-modal.show{display:flex;}
+.help-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5);}
+.help-dialog{position:relative;z-index:1;background:var(--surface);border-radius:var(--r);width:100%;max-width:640px;max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:0 20px 60px rgba(0,0,0,.2);animation:popIn .18s ease;}
+.help-hdr{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--surface);z-index:1;}
+.help-close{margin-left:auto;width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;font-size:18px;display:grid;place-items:center;}
+.help-body{padding:18px;display:flex;flex-direction:column;gap:18px;font-size:13px;line-height:1.65;}
+.help-nav{display:flex;flex-wrap:wrap;gap:5px;}
+.help-nav a{padding:4px 10px;border-radius:99px;font-size:12px;font-weight:600;text-decoration:none;transition:all .15s;}
+.nav-active{background:var(--primary-light);color:var(--primary);}
+.nav-plain{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+.h-sec-title{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:7px;}
+.h-num{background:var(--primary);color:#fff;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;flex-shrink:0;}
+.h-box{background:var(--surface2);border-radius:8px;padding:10px 13px;border:1px solid var(--border);}
+.h-green{background:var(--success-bg);border:1px solid var(--success-b);border-radius:8px;padding:10px 13px;color:var(--success);}
+.h-blue{background:var(--primary-light);border:1px solid var(--primary);border-radius:8px;padding:10px 13px;color:var(--primary);}
+.h-yellow{background:var(--warning-bg);border:1px solid var(--warning-b);border-radius:8px;padding:10px 13px;color:var(--warning);}
+.h-err{background:var(--error-bg);border:1px solid var(--error-b);border-radius:8px;padding:10px 13px;color:var(--error);}
+.h-table{width:100%;border-collapse:collapse;font-size:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.h-table thead tr{background:var(--surface2);}
+.h-table th{padding:6px 10px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;}
+.h-table td{padding:6px 10px;}
+.h-table tr+tr{border-top:1px solid var(--divider);}
+details{padding:10px 13px;background:var(--surface2);}
+details+details{border-top:1px solid var(--border);}
+details summary{cursor:pointer;font-weight:600;font-size:12px;-webkit-tap-highlight-color:transparent;}
+details>div{margin-top:6px;font-size:12px;color:var(--muted);}
+
+/* MOBILE */
+@media(max-width:700px){
+  .layout{grid-template-columns:1fr;}
+  .sidebar{border-right:none;border-bottom:1px solid var(--border);max-height:50vh;overflow-y:auto;}
+}
+</style>
+  <link rel="manifest" href="data:application/json,{
+    %22name%22:%22DataMatrix+%D0%A7%D0%97%22,
+    %22short_name%22:%22%D0%A7%D0%97+%D0%A1%D0%BA%D0%B0%D0%BD%D0%B5%D1%80%22,
+    %22display%22:%22standalone%22,
+    %22background_color%22:%22%23141414%22,
+    %22theme_color%22:%22%23141414%22,
+    %22start_url%22:%22.%22,
+    %22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg+xmlns='http://www.w3.org/2000/svg'+viewBox='0+0+100+100'%3E%3Crect+width='100'+height='100'+fill='%23141414'/%3E%3Ctext+y='.9em'+font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E%22,%22sizes%22:%22any%22,%22type%22:%22image/svg+xml%22}]
+  }">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ЧЗ Сканер">
+  <meta name="theme-color" content="#141414">
+</head>
+<body>
+
+<header class="hdr">
+  <div class="logo-icon">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><path d="M3 3h3v3H3zM3 10.5h3v3H3zM3 18h3v3H3zM10.5 3h3v3h-3zM10.5 10.5h3v3h-3zM10.5 18h3v3h-3zM18 3h3v3h-3zM18 10.5h3v3h-3zM18 18h3v3h-3z"/></svg>
+  </div>
+  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.14</div></div>
+  <div class="hdr-right">
+    <button class="btn-icon" id="btnHelp" title="Справка">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </button>
+    <button class="btn-icon" data-theme-toggle title="Тема">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+<aside class="sidebar">
+
+  <div>
+    <div class="sec-title">1. Файл ЧЗ</div>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept=".csv,.txt">
+      <svg style="color:var(--faint);margin-bottom:5px" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <p><strong>Загрузить файл ЧЗ</strong><br>TXT / CSV — каждый код на новой строке</p>
+    </div>
+    <div class="file-loaded" id="fileLoaded"><span>✓</span><span id="fileLoadedText">Файл загружен</span></div>
+  </div>
+
+  <div class="info-box" id="infoBox">
+    <div class="info-row"><span class="info-lbl">Кодов в файле</span><span class="info-val" id="infoTotal">—</span></div>
+    <div class="info-row"><span class="info-lbl">Артикулов (ШК)</span><span class="info-val" id="infoSkus">—</span></div>
+  </div>
+
+  <div class="toggle-row" id="dateToggleRow">
+    <span class="toggle-lbl">📅 Запрашивать дату производства</span>
+    <label class="toggle">
+      <input type="checkbox" id="dateToggle" checked>
+      <div class="toggle-track"></div>
+      <div class="toggle-thumb"></div>
+    </label>
+  </div>
+
+  <div class="sku-section" id="skuSection">
+    <div class="sku-sec-hdr">
+      <div class="sec-title" style="margin-bottom:0;flex:1">2. Товары</div>
+      <button class="sku-filter-btn" id="filterBtn">Только незавершённые</button>
+    </div>
+    <div class="sku-cards" id="skuCards">
+      <div style="font-size:12px;color:var(--faint)">Загрузите файл ЧЗ</div>
+    </div>
+  </div>
+
+  <div class="prog-block" id="progBlock">
+    <div class="sec-title">3. Прогресс</div>
+    <div class="stats">
+      <div class="stat tot"><div class="stat-n" id="sTotal">0</div><div class="stat-l">В файле</div></div>
+      <div class="stat ok"> <div class="stat-n" id="sOk">0</div>  <div class="stat-l">✓ Принято</div></div>
+      <div class="stat bad"><div class="stat-n" id="sBad">0</div>  <div class="stat-l">✗ Ошибок</div></div>
+    </div>
+    <div class="pbar"><div class="pbar-fill" id="pbarFill" style="width:0%"></div></div>
+  </div>
+
+  <div class="sidebar-btns">
+    <button class="btn-primary" id="btnFinish" disabled>Завершить и создать отчёт</button>
+    <button class="btn-ghost" id="btnReset">↺ Начать заново</button>
+  </div>
+
+</aside>
+
+<main class="main">
+  <div class="placeholder" id="placeholder">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 3h3v3H3zM3 10.5h3v3H3zM3 18h3v3H3zM10.5 3h3v3h-3zM10.5 10.5h3v3h-3zM10.5 18h3v3h-3zM18 3h3v3h-3zM18 10.5h3v3h-3zM18 18h3v3h-3z"/></svg>
+    <p>Загрузите файл с кодами ЧЗ, чтобы начать</p>
+  </div>
+
+  <!-- СЧЁТЧИК ОСТАТКА -->
+  <div class="remain-banner" id="remainBanner">
+    <div>
+      <div class="remain-big" id="remainNum">—</div>
+      <div class="remain-lbl">осталось отсканировать</div>
+    </div>
+    <div style="flex:1;text-align:right;font-size:12px;color:var(--warning)" id="remainPct"></div>
+  </div>
+
+  <div class="scan-panel" id="scanPanel">
+    <div class="scan-hdr">
+      <div class="scan-dot" id="scanDot"></div>
+      <span class="scan-hdr-title">DataMatrix ЧЗ</span>
+      <span class="scan-hdr-hint" id="scanHint">Загрузите файл</span>
+    </div>
+    <div class="scan-body">
+      <div class="scan-row">
+        <input type="text" class="scan-input" id="scanInput"
+          placeholder="Сканируйте DataMatrix (ШК игнорируются)"
+          autocomplete="off" autocorrect="off" spellcheck="false" disabled>
+        <button class="btn-cam" id="btnCam" title="Сканировать камерой" style="display:none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Камера
+        </button>
+      </div>
+      <div class="cam-wrap" id="camWrap">
+        <video id="camVideo" autoplay playsinline muted></video>
+        <div class="cam-overlay"><div class="cam-viewfinder"></div></div>
+      </div>
+      <div class="flash" id="flash">
+        <span class="flash-icon" id="flashIcon"></span>
+        <div class="flash-msg">
+          <strong id="flashTitle"></strong>
+          <span id="flashSub"></span>
+          <div class="flash-detail" id="flashDetail"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="log-wrap" id="logWrap">
+    <div class="log-hdr">
+      <span class="log-hdr-title">Журнал</span>
+      <span class="log-count" id="logCount">0</span>
+      <button class="log-clear" id="btnClear">Очистить</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th class="td-s"></th>
+          <th>Код ЧЗ</th>
+          <th>ШК</th>
+          <th>Дата пр-ва</th>
+          <th>Результат</th>
+          <th>Время</th>
+          <th class="td-del"></th>
+        </tr></thead>
+        <tbody id="logBody">
+          <tr class="log-empty-row"><td colspan="7">Пока нет сканирований</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="report" id="reportWrap">
+    <div class="report-hdr">
+      <span class="report-hdr-title">📋 Отчёт</span>
+      <button class="btn-dl" id="btnDl">⬇ Скачать TXT</button>
+      <button class="btn-dl" id="btnDlCsv" style="margin-left:8px">⬇ Скачать CSV</button>
+    </div>
+    <div class="report-body" id="reportBody"></div>
+  </div>
+</main>
+</div>
+
+<!-- DATE MODAL -->
+<div class="date-modal" id="dateModal">
+  <div class="date-backdrop" id="dateBackdrop"></div>
+  <div class="date-dialog">
+    <div class="modal-hdr"><h3 id="modalTitle">Дата производства</h3><p id="modalDesc">Укажите дату</p></div>
+    <div class="modal-body">
+      <div class="date-ean-badge" id="modalEan">—</div>
+      <input type="date" class="date-field" id="modalDateInput">
+      <div class="date-actions">
+        <button class="date-ok" id="modalOk">Сохранить</button>
+        <button class="date-skip" id="modalSkip">Пропустить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HELP MODAL -->
+<div class="help-modal" id="helpModal">
+  <div class="help-backdrop" id="helpBackdrop"></div>
+  <div class="help-dialog">
+    <div class="help-hdr">
+      <span style="font-size:18px">📖</span>
+      <strong style="font-size:14px">Справка — Сканер ЧЗ v6.14</strong>
+      <button class="help-close" id="helpClose">✕</button>
+    </div>
+    <div class="help-body">
+      <div class="help-nav">
+        <a href="#h1" class="nav-active">Запуск</a>
+        <a href="#h2" class="nav-plain">Файл ЧЗ</a>
+        <a href="#h3" class="nav-plain">Android</a>
+        <a href="#h4" class="nav-plain">Сканирование</a>
+        <a href="#h5" class="nav-plain">Ошибки</a>
+        <a href="#h6" class="nav-plain">Даты</a>
+        <a href="#h7" class="nav-plain">Сессии</a>
+        <a href="#h8" class="nav-plain">Отчёт</a>
+        <a href="#h9" class="nav-plain">FAQ</a>
+      </div>
+
+      <div id="h1">
+        <div class="h-sec-title"><span class="h-num">1</span>Как запустить</div>
+        <div class="h-box">Двойной клик на <b>cz-scanner-v6.13.html</b> — откроется в браузере (Chrome / Edge). Интернет и установка не нужны.<br><br>
+        <b>На Android (PWA):</b> открой файл в Chrome → меню ⋮ → «Добавить на главный экран». Программа откроется без адресной строки в полноэкранном режиме.</div>
+      </div>
+
+      <div id="h2">
+        <div class="h-sec-title"><span class="h-num">2</span>Загрузка файла ЧЗ</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div>Файл <b>.txt</b> или <b>.csv</b> из личного кабинета Честного Знака. Каждый DataMatrix-код на новой строке.</div>
+          <div class="h-box">• Перетащи файл на зону «Загрузить файл ЧЗ»<br>• или кликни на неё и выбери в проводнике</div>
+          <div class="h-green">✓ После загрузки сразу отображаются все товары (артикулы) из файла — затемнённые до первого скана.</div>
+          <div>Можно загружать <b>несколько разных файлов</b> по очереди — каждый хранится как отдельная сессия. Переключение через баннер «Сохранённые сессии».</div>
+        </div>
+      </div>
+
+      <div id="h3">
+        <div class="h-sec-title"><span class="h-num">3</span>Как открыть на Android</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="h-blue"><b>Самый простой способ:</b><br>
+          1. Скинь файл на телефон (Telegram, почта, USB)<br>
+          2. Открой в Диспетчере файлов → папка Загрузки<br>
+          3. Тапни → «Открыть в Chrome»<br>
+          4. Меню ⋮ → «Добавить на главный экран» — PWA-режим без адресной строки</div>
+          <div class="h-box"><b>Или напрямую из Chrome:</b><br><code style="font-size:12px">file:///sdcard/Download/cz-scanner-v6.13.html</code></div>
+          <div class="h-yellow">⚠️ Если файл открывается как текст — зажми → «Поделиться» → Chrome.</div>
+          <div><b>Сканер Bluetooth / USB-OTG:</b> режим HID (эмуляция клавиатуры). Подключи, тапни на поле ввода — сканируй.</div>
+          <div class="h-box"><b>Суффикс CR:</b> включи в настройках сканера. Каждый код будет отправляться мгновенно.</div>
+        </div>
+      </div>
+
+      <div id="h4">
+        <div class="h-sec-title"><span class="h-num">4</span>Сканирование</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="h-blue"><b>Сканер (HID-клавиатура):</b> направь на DataMatrix → курсор должен быть в поле ввода. Код принимается автоматически по суффиксу CR или по концу DataMatrix (символ «=»).</div>
+          <div><b>Звуковые сигналы:</b></div>
+          <div class="h-box">
+            🟢 <b>Короткий пик</b> — код принят, всё ок<br>
+            🟡 <b>Два нисходящих тона</b> — дубликат, пропускается<br>
+            🔴 <b>Тройной тревожный сигнал</b> — чужой код, не из этой партии
+          </div>
+          <div>ШК (EAN-13) — <b>игнорируются</b> молча, в журнал не попадают.</div>
+          <div class="h-blue"><b>Камера:</b> кнопка 📷 → навести на DataMatrix. Работает на телефоне и ноутбуке со встроенной камерой.</div>
+        </div>
+      </div>
+
+      <div id="h5">
+        <div class="h-sec-title"><span class="h-num">5</span>Ошибки и статусы</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="h-green">✅ <b>Принят</b> — DataMatrix из файла ЧЗ, код засчитан</div>
+          <div class="h-yellow">⚠️ <b>Дубликат</b> — этот код уже сканировался в этой сессии, пропускается</div>
+          <div style="color:var(--error)">❌ <b>ЧУЖОЙ КОД</b> — DataMatrix не из загруженного файла ЧЗ (другая партия, другой поставщик)</div>
+          <div style="color:var(--muted)">⊘ <b>ШК игнорируется</b> — EAN-13 штрихкод, не DataMatrix</div>
+          <div class="h-box">При чужом коде звучит тройной тревожный сигнал — не прерывай сканирование, продолжай дальше.</div>
+        </div>
+      </div>
+
+      <div id="h6">
+        <div class="h-sec-title"><span class="h-num">6</span>Даты производства</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div>Если включён тумблер <b>«Указывать дату пр-ва»</b> — при первом скане каждого артикула появится окно выбора даты.</div>
+          <div class="h-box">• Формат: <b>ДД.ММ.ГГГГ</b><br>• Можно добавить несколько дат на один артикул (разные партии)<br>• Активная дата — та, которая выбрана кружком<br>• Дату можно удалить крестиком (✕) если добавлена по ошибке</div>
+          <div>Даты сохраняются в отчёт и в сессию (восстанавливаются после перезагрузки).</div>
+        </div>
+      </div>
+
+      <div id="h7">
+        <div class="h-sec-title"><span class="h-num">7</span>Сессии и автосохранение</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="h-green">✓ Каждый принятый код автоматически сохраняется в браузере (localStorage). Сессия живёт 7 дней.</div>
+          <div><b>Несколько файлов / партий:</b> загружай разные файлы ЧЗ — каждый хранится отдельно по имени файла.</div>
+          <div class="h-box"><b>Восстановление после перезагрузки:</b><br>
+          1. Загрузи тот же файл ЧЗ<br>
+          2. Появится баннер «Сохранённые сессии»<br>
+          3. Нажми «Восстановить» — все принятые коды и даты вернутся</div>
+          <div class="h-yellow">⚠️ «Начать заново» — полностью очищает текущую сессию из памяти.</div>
+        </div>
+      </div>
+
+      <div id="h8">
+        <div class="h-sec-title"><span class="h-num">8</span>Отчёт и экспорт</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div>После завершения нажми <b>«Завершить проверку»</b> — откроется итоговый отчёт.</div>
+          <div class="h-box">
+            <b>⬇ Скачать TXT</b> — полный отчёт текстом: статистика + все коды<br>
+            <b>⬇ Скачать CSV</b> — таблица для Excel / Google Таблицы:<br>
+            &nbsp;&nbsp;колонки: Тип | КОД ЧЗ | ШК | Дата | Результат<br>
+            &nbsp;&nbsp;принятые + пропущенные, с BOM (корректно открывается в Excel)
+          </div>
+          <div>Файлы сохраняются с датой в имени: <code style="font-size:11px">отчет-чз-2026-05-13.csv</code></div>
+        </div>
+      </div>
+
+      <div id="h9">
+        <div class="h-sec-title"><span class="h-num">9</span>FAQ</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div><b>Коды слипаются в одну строку?</b><br>Убедись что в настройках сканера включён суффикс CR. Программа разделяет коды по символу «=» в конце DataMatrix — это работает без суффикса, но CR надёжнее.</div>
+          <div><b>GS/FNC1 не определяется?</b><br>Программа ловит ASCII 29 через keypress. Работает в Chrome и Edge. Firefox может не поддерживать.</div>
+          <div><b>Сессия не восстанавливается?</b><br>Имя файла должно совпадать точно. Используй один и тот же файл ЧЗ.</div>
+          <div><b>Можно работать без интернета?</b><br>Да, полностью. Файл работает локально, данные хранятся в браузере.</div>
+          <div><b>Поддерживается ли iOS?</b><br>Частично. Safari на iPhone открывает файл, но PWA-режим ограничен. Рекомендуется Chrome на Android.</div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<!-- zxing для камеры -->
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+
+<script>
+'use strict';
+
+// ═══ STATE ═══
+const S = {
+  czCodes:  new Set(),   // сырые строки из файла
+  gtinMap:  new Map(),   // gtin14 -> Set<raw>
+  scanned:  new Set(),   // принятые сырые строки
+  errors:   0,
+  logRows:  0,
+  skuDates: new Map(),   // ean13 -> {dates[], activeIdx, gtin14}
+  filterIncomplete: false,
+};
+
+// ═══ DOM ═══
+const $=id=>document.getElementById(id);
+const uploadZone=$('uploadZone'), fileInput=$('fileInput');
+const fileLoaded=$('fileLoaded'), fileLoadedText=$('fileLoadedText');
+const infoBox=$('infoBox'), infoTotal=$('infoTotal'), infoSkus=$('infoSkus');
+const dateToggleRow=$('dateToggleRow'), dateToggle=$('dateToggle');
+const skuSection=$('skuSection'), skuCards=$('skuCards'), filterBtn=$('filterBtn');
+const progBlock=$('progBlock');
+const sTotal=$('sTotal'), sOk=$('sOk'), sBad=$('sBad'), pbarFill=$('pbarFill');
+const remainBanner=$('remainBanner'), remainNum=$('remainNum'), remainPct=$('remainPct');
+const btnFinish=$('btnFinish'), btnReset=$('btnReset');
+const placeholder=$('placeholder');
+const scanPanel=$('scanPanel'), scanDot=$('scanDot'), scanHint=$('scanHint');
+const scanInput=$('scanInput'), btnCam=$('btnCam');
+const camWrap=$('camWrap'), camVideo=$('camVideo');
+const flash=$('flash'), flashIcon=$('flashIcon'), flashTitle=$('flashTitle'), flashSub=$('flashSub'), flashDetail=$('flashDetail');
+const logWrap=$('logWrap'), logBody=$('logBody'), logCount=$('logCount'), btnClear=$('btnClear');
+const reportWrap=$('reportWrap'), reportBody=$('reportBody'), btnDl=$('btnDl');
+const dateModal=$('dateModal'), modalEan=$('modalEan'), modalDateInput=$('modalDateInput');
+const modalOk=$('modalOk'), modalSkip=$('modalSkip'), dateBackdrop=$('dateBackdrop');
+const modalTitle=$('modalTitle'), modalDesc=$('modalDesc');
+const helpModal=$('helpModal'), helpBackdrop=$('helpBackdrop');
+
+// ═══ THEME ═══
+(()=>{
+  const btn=document.querySelector('[data-theme-toggle]'),root=document.documentElement;
+  let t=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+  root.setAttribute('data-theme',t);
+  btn&&btn.addEventListener('click',()=>{t=t==='dark'?'light':'dark';root.setAttribute('data-theme',t);});
+})();
+
+// ═══ AUDIO ALARM ═══
+// ═══ ЗВУКИ ═══
+function _beep(freq, dur, vol, delay){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type='sine';
+    o.frequency.value=freq;
+    g.gain.setValueAtTime(vol, ctx.currentTime+(delay||0)/1000);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+(delay||0)/1000+dur/1000);
+    o.start(ctx.currentTime+(delay||0)/1000);
+    o.stop(ctx.currentTime+(delay||0)/1000+dur/1000+0.05);
+  }catch(e){}
+}
+function playOk(){    _beep(1046,80,0.25);  }               // C6 — короткий высокий «пик»
+function playDup(){   _beep(660,120,0.2); _beep(440,120,0.2,140); } // дубль — два средних
+function playAlarm(){ // чужой — тройной высокий тревожный (как было)
+  _beep(880,120,0.35); _beep(880,120,0.3,160); _beep(880,120,0.35,320);
+}
+
+function playOk(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.connect(g);g.connect(ctx.destination);
+    o.frequency.value=1200;g.gain.value=0.12;
+    o.start(ctx.currentTime);o.stop(ctx.currentTime+0.06);
+  }catch(e){}
+}
+
+// ═══ FILE ═══
+uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('drag-over');});
+uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('drag-over');e.dataTransfer.files[0]&&loadFile(e.dataTransfer.files[0]);});
+fileInput.addEventListener('change',e=>e.target.files[0]&&loadFile(e.target.files[0]));
+
+function loadFile(file){
+  _currentFile = file.name; // запоминаем имя для сессий
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const lines=e.target.result.split(/\r?\n/)
+      .map(l=>stripTrailing(l))
+      .filter(l=>l.length>10);
+    if(!lines.length){alert('Файл пустой.');return;}
+    let loaded=0,skipped=0;
+    S.czCodes.clear();S.gtinMap.clear();
+    for(const line of lines){
+      const p=parseDM(line);
+      if(!p){skipped++;continue;}
+      S.czCodes.add(line);  // храним КАК ЕСТЬ (только trailing stripped)
+      if(!S.gtinMap.has(p.gtin14))S.gtinMap.set(p.gtin14,new Set());
+      S.gtinMap.get(p.gtin14).add(line);
+      loaded++;
+    }
+    if(!loaded){alert('Не удалось распознать DataMatrix-коды.');return;}
+    fileLoadedText.textContent=`${file.name} — ${loaded} кодов${skipped?', '+skipped+' пропущено':''}`;
+    fileLoaded.classList.add('show');
+    infoTotal.textContent=loaded;
+    infoSkus.textContent=S.gtinMap.size;
+    infoBox.classList.add('show');
+    dateToggleRow.classList.add('show');
+    skuSection.classList.add('show');
+    progBlock.classList.add('show');
+    placeholder.style.display='none';
+    scanPanel.classList.add('show');
+    logWrap.classList.add('show');
+    scanInput.disabled=false;
+    btnCam.style.display=(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)?'flex':'none';
+    scanInput.focus();
+    btnFinish.disabled=false;
+    btnReset.classList.add('show');
+    sTotal.textContent=loaded;
+    updateStats();
+    // Показываем баннер сохранённых сессий (включая текущий файл)
+    renderSkuCards(); // показываем все товары сразу
+    lsShowRestoreBanner(file.name);
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+// ═══ PARSE ═══
+// Убираем только \r\n\t в конце строки — FNC1 / GS (\x1d) НЕ трогаем
+function stripTrailing(s){return s.replace(/[\r\n\t]+$/,'');}
+
+function parseDM(raw){
+  const m=raw.match(/01(\d{14})/);
+  if(!m)return null;
+  const gtin14=m[1];
+  return{gtin14, ean13:gtin14.startsWith('0')?gtin14.slice(1):gtin14};
+}
+
+function isEAN13(s){return /^\d{13}$/.test(s.trim());}
+
+// ═══ LOOKUP: ищем код в Set по точному совпадению,
+// запасной вариант — только trailing trim (на случай если сканер добавляет CR)
+function findInCodes(raw){
+  if(S.czCodes.has(raw))return raw;
+  const t=stripTrailing(raw);
+  if(S.czCodes.has(t))return t;
+  return null;
+}
+
+// ═══ SCAN INPUT v6.12 ═══
+// Mertech CL-2425 | HID-клавиатура | суффикс CR
+//
+// ПРОБЛЕМА ВСЕХ ПРЕДЫДУЩИХ ВЕРСИЙ:
+// При быстром сканировании CR приходит ПОСЛЕ того как начало следующего
+// кода уже попало в input.value. keydown Enter читает смешанное значение.
+//
+// РЕШЕНИЕ: не ждём CR как разделитель.
+// Детектируем конец кода по структуре DataMatrix ЧЗ:
+//   последний символ '=' (конец base64 подписи группы 92)
+//   + длина value ≥ 81 символ
+// Это срабатывает ТОЧНО в момент прихода последнего символа кода,
+// до того как CR или следующий код попадут в value.
+//
+// CR (keydown Enter) — дополнительный путь на случай если код не на '='
+
+let gsPos = [];
+
+// GS/FNC1 — только через keypress (WM_CHAR без WM_KEYDOWN)
+scanInput.addEventListener('keypress', function(e) {
+  var ch = e.charCode || e.which;
+  if (ch === 29) {
+    e.preventDefault();
+    gsPos.push(scanInput.value.length);
+  }
+});
+
+// ОСНОВНОЙ ПУТЬ: детект конца кода в input event
+scanInput.addEventListener('input', function() {
+  var val = scanInput.value;
+  var len = val.length;
+
+  // Конец DataMatrix ЧЗ: последний символ '=' и длина >= 81
+  if (len >= 81 && val.charAt(len - 1) === '=') {
+    flush();
+    return;
+  }
+
+  // Страховка: CR/LF попал в value (Edge иногда делает это)
+  if (val.indexOf('\r') !== -1 || val.indexOf('\n') !== -1) {
+    var parts = val.split(/[\r\n]+/);
+    var savedGs = gsPos.slice();
+    reset();
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i].trim();
+      if (p.length >= 20) handleScan(insertGS(p, i === 0 ? savedGs : []));
+    }
+  }
+});
+
+// ДОПОЛНИТЕЛЬНЫЙ ПУТЬ: CR суффикс (если код не заканчивается на '=')
+scanInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' || e.keyCode === 13) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (scanInput.value.length >= 20) flush();
+    return;
+  }
+  if (e.key === 'Escape') { reset(); }
+});
+
+function flush() {
+  var raw = buildRaw();
+  reset();
+  if (raw.trim().length >= 20) handleScan(raw.trim());
+}
+
+function buildRaw() {
+  return insertGS(scanInput.value, gsPos);
+}
+
+function insertGS(val, positions) {
+  if (!positions || positions.length === 0) return val;
+  var pos = positions.slice().sort(function(a,b){ return a-b; });
+  var out = '', from = 0;
+  for (var i = 0; i < pos.length; i++) {
+    var p = pos[i];
+    if (p <= val.length) {
+      out += val.slice(from, p) + '\x1d';
+      from = p;
+    }
+  }
+  return out + val.slice(from);
+}
+
+function reset() {
+  scanInput.value = '';
+  gsPos = [];
+}
+function handleScan(raw){
+  const s=stripTrailing(raw);
+  // Тихо игнорируем EAN-13
+  if(isEAN13(s))return;
+
+  const dm=parseDM(s);
+  if(!dm){
+    showFlash('err','⛔','Неизвестный формат','Не DataMatrix ЧЗ',s.slice(0,60));
+    addLog('err',s,'—',null,'Неизвестный формат',ts());
+    S.errors++;updateStats();
+    return;
+  }
+
+  // пульс
+  scanDot.classList.add('active');
+  clearTimeout(scanDot._t);
+  scanDot._t=setTimeout(()=>scanDot.classList.remove('active'),500);
+
+  // ищем точно в Set
+  const czRaw=findInCodes(s);
+
+  // Дубль
+  if(S.scanned.has(czRaw||s)){
+    playDup();
+    showFlash('warn','⚠️','Дубликат','Уже отсканирован — пропускаем',s.slice(0,50));
+    addLog('warn',s,dm.ean13,getActiveDate(dm.ean13),'Дубликат — пропущен',ts());
+    return;
+  }
+
+  // Не из файла
+  if(!czRaw){
+    playAlarm();
+    showFlash('err','❌','ЧУЖОЙ КОД!','DataMatrix не из этой партии!',s.slice(0,60));
+    addLog('err',s,dm.ean13,null,'Не из файла ЧЗ — ЧУЖОЙ КОД',ts());
+    S.errors++;
+    ensureSku(dm.ean13,dm.gtin14);
+    updateStats();
+    return;
+  }
+
+  // Нужна дата?
+  if(dateToggle.checked && !S.skuDates.has(dm.ean13)){
+    openDateModal(dm.ean13,'first',()=>commitDM(czRaw,dm));
+    return;
+  }
+  ensureSku(dm.ean13,dm.gtin14);
+  commitDM(czRaw,dm);
+}
+
+function commitDM(czRaw,dm){
+  S.scanned.add(czRaw);
+  ensureSku(dm.ean13,dm.gtin14);
+  const date=getActiveDate(dm.ean13);
+  playOk();
+  showFlash('ok','✅','Принят',dm.ean13,'');
+  addLog('ok',czRaw,dm.ean13,date,'Соответствует файлу ЧЗ',ts());
+  updateStats();
+  renderSkuCards();
+  lsSave();
+  setTimeout(()=>scanInput.focus(),60);
+}
+
+// ═══ SKU CARDS ═══
+function ensureSku(ean13,gtin14){
+  if(!S.skuDates.has(ean13)) S.skuDates.set(ean13,{dates:[],activeIdx:0,gtin14});
+  else if(gtin14&&!S.skuDates.get(ean13).gtin14) S.skuDates.get(ean13).gtin14=gtin14;
+}
+
+filterBtn.addEventListener('click',()=>{
+  S.filterIncomplete=!S.filterIncomplete;
+  filterBtn.classList.toggle('active',S.filterIncomplete);
+  filterBtn.textContent=S.filterIncomplete?'Показать все':'Только незавершённые';
+  renderSkuCards();
+});
+
+function renderSkuCards(){
+  // Показываем ВСЕ товары из файла ЧЗ сразу (не только отсканированные)
+  if(!S.gtinMap.size){
+    skuCards.innerHTML='<div style="font-size:12px;color:var(--faint)">Загрузите файл ЧЗ</div>';
+    return;
+  }
+  const scroll=skuCards.scrollTop;
+  skuCards.innerHTML='';
+
+  S.gtinMap.forEach((codes,gtin14)=>{
+    const ean13=gtin14.startsWith('0')?gtin14.slice(1):gtin14;
+    const sd=S.skuDates.get(ean13)||{dates:[],activeIdx:0,gtin14};
+    const scCount=[...codes].filter(c=>S.scanned.has(c)).length;
+    const total=codes.size;
+    const done=total>0&&scCount===total;
+    const started=scCount>0;
+    if(S.filterIncomplete&&done)return;
+    const pct=total>0?Math.round(scCount/total*100):0;
+
+    const card=document.createElement('div');
+    // Затемняем карточки без начатого сканирования
+    card.className='sku-card'+(done?' done-card':'')+(!started?' sku-card-dim':'');
+
+    const hdr=document.createElement('div');
+    hdr.className='sku-card-hdr';
+    hdr.innerHTML=`
+      <span class="sku-ean">${esc(ean13)}</span>
+      <div class="sku-prog-wrap">
+        <span class="sku-prog-txt ${done?'done':started?'partial':''}">${scCount}/${total}</span>
+        <div class="sku-mini-bar"><div class="sku-mini-fill" style="width:${pct}%"></div></div>
+      </div>`;
+    card.appendChild(hdr);
+
+    const dw=document.createElement('div');
+    dw.className='sku-dates-wrap';
+    if(!sd.dates.length){
+      const nh=document.createElement('div');nh.className='no-date-hint';nh.textContent='Дата не указана';dw.appendChild(nh);
+    } else {
+      sd.dates.forEach((d,idx)=>{
+        const opt=document.createElement('div');
+        opt.className='date-option'+(idx===sd.activeIdx?' active':'');
+        opt.innerHTML=`
+          <div class="date-radio"><div class="date-radio-dot"></div></div>
+          <span class="date-opt-val${idx===sd.activeIdx?' active-v':''}">${fmtDate(d)}</span>
+          <span class="date-active-lbl">активная</span>
+          ${sd.dates.length>1?`<span class="date-del" data-ean="${esc(ean13)}" data-idx="${idx}">✕</span>`:''}`;
+        opt.addEventListener('click',e=>{
+          if(e.target.classList.contains('date-del'))return;
+          sd.activeIdx=idx;
+          if(!S.skuDates.has(ean13)) S.skuDates.set(ean13,sd);
+          renderSkuCards();scanInput.focus();
+        });
+        dw.appendChild(opt);
+      });
+    }
+    const addBtn=document.createElement('button');
+    addBtn.className='date-add-btn';
+    addBtn.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> добавить дату';
+    addBtn.addEventListener('click',()=>{
+      if(!S.skuDates.has(ean13)) S.skuDates.set(ean13,{dates:[],activeIdx:0,gtin14});
+      openDateModal(ean13,'add',null);
+    });
+    dw.appendChild(addBtn);
+    card.appendChild(dw);
+    skuCards.appendChild(card);
+  });
+
+  skuCards.querySelectorAll('.date-del').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      const sd=S.skuDates.get(btn.dataset.ean);
+      if(!sd)return;
+      sd.dates.splice(+btn.dataset.idx,1);
+      if(sd.activeIdx>=sd.dates.length)sd.activeIdx=Math.max(0,sd.dates.length-1);
+      renderSkuCards();scanInput.focus();
+    });
+  });
+  skuCards.scrollTop=scroll;
+}
+
+
+// ═══ DATE MODAL ═══
+let _mcb=null, _mean=null;
+function openDateModal(ean13,mode,cb){
+  _mcb=cb;_mean=ean13;
+  modalEan.textContent=ean13;
+  modalDateInput.value='';
+  if(mode==='first'){modalTitle.textContent='Дата производства';modalDesc.textContent='Новый артикул. Укажите дату.';modalSkip.style.display='';}
+  else{modalTitle.textContent='Добавить дату';modalDesc.textContent='Новая дата для этого артикула.';modalSkip.style.display='none';}
+  dateModal.classList.add('show');
+  setTimeout(()=>modalDateInput.focus(),80);
+}
+function applyModal(){
+  const v=modalDateInput.value;
+  if(_mean){
+    ensureSku(_mean,null);
+    const sd=S.skuDates.get(_mean);
+    if(v&&!sd.dates.includes(v)){sd.dates.push(v);sd.activeIdx=sd.dates.length-1;}
+  }
+  const cb=_mcb;closeModal();if(cb)cb();renderSkuCards();scanInput.focus();
+}
+function skipModal(){
+  if(_mean)ensureSku(_mean,null);
+  const cb=_mcb;closeModal();if(cb)cb();renderSkuCards();scanInput.focus();
+}
+function closeModal(){dateModal.classList.remove('show');_mcb=null;}
+modalOk.addEventListener('click',applyModal);
+modalSkip.addEventListener('click',skipModal);
+dateBackdrop.addEventListener('click',skipModal);
+modalDateInput.addEventListener('keydown',e=>{if(e.key==='Enter')modalOk.click();});
+function getActiveDate(ean13){const sd=S.skuDates.get(ean13);return sd&&sd.dates.length?sd.dates[sd.activeIdx]:null;}
+
+// ═══ FLASH ═══
+let flashT=null;
+function showFlash(type,icon,title,sub,detail){
+  flash.className='flash '+type;
+  flashIcon.textContent=icon;
+  flashTitle.textContent=title;
+  flashSub.textContent=sub;
+  flashDetail.textContent=detail?detail.slice(0,80)+(detail.length>80?'…':''):'';
+  clearTimeout(flashT);
+  flashT=setTimeout(()=>{flash.className='flash';},type==='err'?8000:3500);
+}
+
+// ═══ STATS ═══
+function updateStats(){
+  const total=S.czCodes.size, ok=S.scanned.size, rem=total-ok;
+  sOk.textContent=ok; sBad.textContent=S.errors;
+  pbarFill.style.width=total>0?Math.round(ok/total*100)+'%':'0%';
+  if(total>0){
+    remainBanner.classList.add('show');
+    remainNum.textContent=rem;
+    remainPct.textContent=Math.round(ok/total*100)+'% выполнено';
+  }
+}
+
+// ═══ LOG ═══
+function addLog(type,cz,ean,date,msg,t){
+  if(logBody.querySelector('.log-empty-row'))logBody.innerHTML='';
+  S.logRows++;logCount.textContent=S.logRows;
+  const icons={ok:'<span style="color:var(--success)">✓</span>',err:'<span style="color:var(--error)">✗</span>',warn:'<span style="color:var(--warning)">!</span>'};
+  const mc={ok:'ok-t',err:'err-t',warn:'warn-t'};
+  const tr=document.createElement('tr');
+  tr.innerHTML=`
+    <td class="td-s">${icons[type]||''}</td>
+    <td class="td-cz" title="${esc(cz)}">${esc(cz.slice(0,28))}${cz.length>28?'…':''}</td>
+    <td class="td-ean">${esc(ean)}</td>
+    <td class="td-date">${date?fmtDate(date):'<span style="color:var(--faint)">—</span>'}</td>
+    <td class="td-msg ${mc[type]||''}">${esc(msg)}</td>
+    <td class="td-time">${t}</td>
+    <td class="td-del"><button class="btn-del-row" title="Удалить строку">✕</button></td>`;
+  // bind delete — удаляет строку и, если это принятый код, откатывает скан
+  tr.querySelector('.btn-del-row').addEventListener('click',()=>{
+    // откат: если это принятый код — убрать из S.scanned
+    if(type==='ok'){
+      if(S.scanned.has(cz)){S.scanned.delete(cz);}
+      // пересчёт sku
+      const dm=parseDM(cz);
+      if(dm)renderSkuCards();
+      updateStats();
+    }
+    if(type==='err')S.errors=Math.max(0,S.errors-1);
+    tr.remove();
+    S.logRows=Math.max(0,S.logRows-1);
+    logCount.textContent=S.logRows;
+    if(!logBody.rows.length)
+      logBody.innerHTML='<tr class="log-empty-row"><td colspan="7">Пока нет сканирований</td></tr>';
+    updateStats();renderSkuCards();scanInput.focus();
+  });
+  logBody.insertBefore(tr,logBody.firstChild);
+}
+btnClear.addEventListener('click',()=>{
+  logBody.innerHTML='<tr class="log-empty-row"><td colspan="7">Пока нет сканирований</td></tr>';
+  S.logRows=0;logCount.textContent='0';
+});
+
+// ═══ CAMERA (zxing) ═══
+let codeReader=null, camActive=false;
+btnCam.addEventListener('click',()=>{
+  if(!camActive) startCamera(); else stopCamera();
+});
+async function startCamera(){
+  try{
+    if(typeof ZXing==='undefined'){
+      showFlash('err','📷','Камера недоступна','Библиотека ZXing не загружена — нет интернета или файл открыт локально','');return;
+    }
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+      showFlash('err','📷','Камера недоступна',
+        'Браузер заблокировал доступ к камере. Откройте файл через https:// или localhost — не через file://','');
+      return;
+    }
+    // Запрашиваем поток напрямую — задняя камера через facingMode environment
+    const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}};
+    const stream=await navigator.mediaDevices.getUserMedia(constraints);
+    camVideo.srcObject=stream;
+    camWrap.classList.add('show');
+    btnCam.classList.add('active');
+    camActive=true;
+    scanHint.textContent='Камера активна — наводите на DataMatrix';
+    codeReader=new ZXing.BrowserMultiFormatReader();
+    codeReader.decodeFromStream(stream,camVideo,result=>{
+      if(result){handleScan(result.getText());}
+    });
+  }catch(e){
+    showFlash('err','📷','Ошибка камеры',e.message||'Нет доступа к камере','');
+    stopCamera();
+  }
+}
+function stopCamera(){
+  if(codeReader){try{codeReader.reset();}catch(e){}}
+  if(camVideo.srcObject){camVideo.srcObject.getTracks().forEach(t=>t.stop());camVideo.srcObject=null;}
+  camWrap.classList.remove('show');
+  btnCam.classList.remove('active');
+  camActive=false;
+  scanHint.textContent='Готово к сканированию';
+  scanInput.focus();
+}
+
+// ═══ REPORT ═══
+btnFinish.addEventListener('click',()=>{
+  stopCamera();
+  const total=S.czCodes.size, ok=S.scanned.size;
+  const missed=[...S.czCodes].filter(c=>!S.scanned.has(c));
+  const isOk=missed.length===0&&S.errors===0;
+
+  let html=`
+    <div class="result-block ${isOk?'success':'failure'}">
+      <span class="result-icon">${isOk?'✅':'❌'}</span>
+      <div class="result-text">
+        <strong>${isOk?'Проверка пройдена успешно':'Проверка НЕ пройдена'}</strong>
+        <p>${isOk?`Все ${total} кодов успешно отсканированы.`
+          :`Не отсканировано: ${missed.length}, ошибок: ${S.errors}.`}</p>
+      </div>
+    </div>`;
+
+  if(S.gtinMap.size){
+    html+=`<div><div class="sec-title" style="margin-bottom:8px">По артикулам</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+    <thead><tr style="background:var(--surface2)">
+      <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--muted)">ШК</th>
+      <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--muted)">Даты</th>
+      <th style="padding:6px 10px;font-size:11px;color:var(--muted)">Файл</th>
+      <th style="padding:6px 10px;font-size:11px;color:var(--muted)">Принято</th>
+    </tr></thead><tbody>`;
+    S.gtinMap.forEach((codes,gtin14)=>{
+      const ean13=gtin14.startsWith('0')?gtin14.slice(1):gtin14;
+      const sc=[...codes].filter(c=>S.scanned.has(c)).length;
+      const sd=S.skuDates.get(ean13);
+      const dStr=sd&&sd.dates.length?sd.dates.map(fmtDate).join(', '):'—';
+      html+=`<tr style="border-top:1px solid var(--divider)">
+        <td style="padding:6px 10px;font-family:monospace;font-size:11px;font-weight:700">${esc(ean13)}</td>
+        <td style="padding:6px 10px;font-size:11px">${esc(dStr)}</td>
+        <td style="padding:6px 10px;text-align:center">${codes.size}</td>
+        <td style="padding:6px 10px;text-align:center;font-weight:700;color:var(--${sc===codes.size?'success':'error'})">${sc}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  }
+
+  if(missed.length){
+    html+=`<div><div class="sec-title" style="margin-bottom:8px">Не отсканировано (${missed.length})</div>
+    <div class="missed-wrap">${missed.slice(0,80).map(c=>{
+      const dm=parseDM(c);
+      return`<span class="missed-tag" title="${esc(c)}">${dm?dm.ean13:'?'}…</span>`;
+    }).join('')}${missed.length>80?`<span style="font-size:11px;color:var(--muted)">+ещё ${missed.length-80}</span>`:''}</div></div>`;
+  }
+
+  if(!isOk){
+    html+=`<div style="background:var(--error-bg);border:1px solid var(--error-b);border-radius:8px;padding:12px 13px">
+      <div style="font-weight:700;color:var(--error);margin-bottom:5px">⚠️ Требуемые действия</div>
+      <div style="font-size:12px;display:flex;flex-direction:column;gap:3px">
+        ${missed.length?`<div>1. Найти и досканировать <b>${missed.length}</b> единиц.</div>`:''}
+        ${S.errors?`<div>${missed.length?'2':'1'}. Разобрать <b>${S.errors}</b> ошибок.</div>`:''}
+        <div>• Повторить проверку.</div>
+      </div>
+    </div>`;
+  }
+
+  reportBody.innerHTML=html;
+  reportWrap.classList.add('show');
+  reportWrap._snap={total,ok,errors:S.errors,missed,isOk,
+    skuDates:new Map(S.skuDates),gtinMap:S.gtinMap,scanned:new Set(S.scanned)};
+  reportWrap.scrollIntoView({behavior:'smooth'});
+});
+
+btnDl.addEventListener('click',()=>{
+  const d=reportWrap._snap; if(!d)return;
+  const now=new Date().toLocaleString('ru-RU');
+  let txt=`=== ОТЧЁТ ПРОВЕРКИ МАРКИРОВКИ ЧЕСТНЫЙ ЗНАК ===\nДата: ${now}\nРЕЗУЛЬТАТ: ${d.isOk?'✓ ПРОЙДЕНА':'✗ НЕ ПРОЙДЕНА'}\n`;
+  txt+=`\n── СТАТИСТИКА ──\nКодов в файле ЧЗ:  ${d.total}\nУспешно принято:   ${d.ok}\nОшибок:            ${d.errors}\nНе отсканировано:  ${d.missed.length}\n`;
+  txt+=`\n── ИТОГИ ПО АРТИКУЛАМ ──\n`;
+  d.gtinMap.forEach((codes,gtin14)=>{
+    const ean13=gtin14.startsWith('0')?gtin14.slice(1):gtin14;
+    const sc=[...codes].filter(c=>d.scanned.has(c)).length;
+    const sd=d.skuDates.get(ean13);
+    const dStr=sd&&sd.dates.length?sd.dates.map(fmtDate).join(', '):'не указана';
+    txt+=`ШК ${ean13} | Даты: ${dStr} | ${sc}/${codes.size}\n`;
+  });
+  txt+=`\n── ПРИНЯТЫЕ КОДЫ (${d.ok}) ──\n`;
+  let idx=1;
+  d.scanned.forEach(c=>{txt+=`${idx}. ${c}\n`;idx++;});
+  if(d.missed.length){
+    txt+=`\n── НЕ ОТСКАНИРОВАНО (${d.missed.length}) ──\n`;
+    d.missed.forEach((c,i)=>txt+=`${i+1}. ${c}\n`);
+  }
+  if(!d.isOk){
+    txt+=`\n── ТРЕБУЕМЫЕ ДЕЙСТВИЯ ──\n`;
+    if(d.missed.length)txt+=`1. Найти и досканировать ${d.missed.length} единиц.\n`;
+    if(d.errors)txt+=`${d.missed.length?2:1}. Разобрать ${d.errors} ошибок.\n`;
+    txt+=`• Повторить проверку.\n`;
+  }
+  const blob=new Blob([txt],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`отчет-чз-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+});
+
+// ═══ RESET ═══
+btnReset.addEventListener('click',()=>{
+  if(!confirm('Начать заново? Все данные будут очищены.'))return;
+  stopCamera();
+  reset(); // сброс поля ввода (gsPos + value)
+  S.czCodes.clear();S.gtinMap.clear();S.scanned.clear();S.skuDates.clear();
+  S.errors=0;S.logRows=0;
+  lsClear(); // очищаем localStorage
+  fileLoaded.classList.remove('show');fileInput.value='';
+  infoBox.classList.remove('show');
+  dateToggleRow.classList.remove('show');
+  skuSection.classList.remove('show');
+  progBlock.classList.remove('show');
+  remainBanner.classList.remove('show');
+  placeholder.style.display='flex';
+  scanPanel.classList.remove('show');logWrap.classList.remove('show');reportWrap.classList.remove('show');
+  logBody.innerHTML='<tr class="log-empty-row"><td colspan="7">Пока нет сканирований</td></tr>';
+  skuCards.innerHTML='<div style="font-size:12px;color:var(--faint)">Загрузите файл ЧЗ</div>';
+  flash.className='flash';
+  btnFinish.disabled=true;btnReset.classList.remove('show');
+  scanInput.disabled=true;btnCam.style.display='none';
+  sOk.textContent='0';sBad.textContent='0';sTotal.textContent='0';pbarFill.style.width='0%';
+  updateStats();
+});
+
+// ═══ HELP ═══
+$('btnHelp').addEventListener('click',()=>helpModal.classList.add('show'));
+$('helpClose').addEventListener('click',()=>helpModal.classList.remove('show'));
+helpBackdrop.addEventListener('click',()=>helpModal.classList.remove('show'));
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){helpModal.classList.remove('show');closeModal();}
+});
+
+// ═══ UTILS ═══
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmtDate(d){if(!d)return'—';const p=d.split('-');return p.length===3?`${p[2]}.${p[1]}.${p[0]}`:d;}
+function ts(){return new Date().toTimeString().slice(0,8);}
+
+
+// ═══ CSV ЭКСПОРТ ═══
+const btnDlCsv=$('btnDlCsv');
+btnDlCsv.addEventListener('click',()=>{
+  const d=reportWrap._snap; if(!d)return;
+  const now=new Date().toLocaleString('ru-RU');
+  // BOM для корректного открытия в Excel
+  let csv='﻿';
+  csv+='Тип;КОД ЧЗ;ШК (EAN13);Дата пр-ва;Результат\n';
+  // Принятые
+  d.scanned.forEach(c=>{
+    const dm=parseDM(c);
+    const ean=dm?dm.ean13:'';
+    const sd=d.skuDates.get(ean);
+    const dt=sd&&sd.dates&&sd.dates.length?sd.dates.map(fmtDate).join(' '):'';
+    csv+=`OK;"${c.replace(/"/g,'""')}";${ean};${dt};Соответствует файлу ЧЗ\n`;
+  });
+  // Не отсканировано
+  d.missed.forEach(c=>{
+    const dm=parseDM(c);
+    const ean=dm?dm.ean13:'';
+    csv+=`ПРОПУЩЕН;"${c.replace(/"/g,'""')}";${ean};;Не отсканирован\n`;
+  });
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`отчет-чз-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+});
+
+// ═══ LOCALSTORAGE — МУЛЬТИСЕССИЯ ═══
+// Каждая сессия = один файл ЧЗ. Хранятся по имени файла.
+// Структура LS: { [fileName]: { ts, scanned[], errors, logRows, skuDates[], logHTML, statsOk, statsBad, statsTotal, pbar } }
+const LS_ROOT = 'cz-sessions';
+let _currentFile = null; // имя текущего файла
+
+function lsAll(){
+  try{ return JSON.parse(localStorage.getItem(LS_ROOT)||'{}'); }catch(e){ return {}; }
+}
+function lsSave(){
+  if(!_currentFile) return;
+  try{
+    const all = lsAll();
+    all[_currentFile] = {
+      ts: Date.now(),
+      scanned: [...S.scanned],
+      errors: S.errors,
+      logRows: S.logRows,
+      skuDates: [...S.skuDates.entries()],
+      logHTML: logBody.innerHTML,
+      statsOk: sOk.textContent,
+      statsBad: sBad.textContent,
+      statsTotal: sTotal.textContent,
+      pbar: pbarFill.style.width
+    };
+    localStorage.setItem(LS_ROOT, JSON.stringify(all));
+  }catch(e){}
+}
+function lsClear(){
+  if(!_currentFile) return;
+  try{
+    const all = lsAll();
+    delete all[_currentFile];
+    localStorage.setItem(LS_ROOT, JSON.stringify(all));
+  }catch(e){}
+}
+function lsClearAll(){
+  try{ localStorage.removeItem(LS_ROOT); }catch(e){}
+}
+function lsRestore(fileName){
+  try{
+    const all = lsAll();
+    const d = all[fileName];
+    if(!d) return false;
+    if(Date.now() - d.ts > 7*86400000){ delete all[fileName]; localStorage.setItem(LS_ROOT,JSON.stringify(all)); return false; }
+    if(!d.scanned || !d.scanned.length) return false;
+    d.scanned.forEach(c => S.scanned.add(c));
+    S.errors = d.errors || 0;
+    S.logRows = d.logRows || 0;
+    if(d.skuDates) d.skuDates.forEach(([k,v]) => S.skuDates.set(k,v));
+    if(d.logHTML) logBody.innerHTML = d.logHTML;
+    if(d.statsOk) sOk.textContent = d.statsOk;
+    if(d.statsBad) sBad.textContent = d.statsBad;
+    if(d.statsTotal) sTotal.textContent = d.statsTotal;
+    if(d.pbar) pbarFill.style.width = d.pbar;
+    return true;
+  }catch(e){ return false; }
+}
+
+// Показываем список сохранённых сессий в баннере
+function lsShowRestoreBanner(fileName){
+  const all = lsAll();
+  const sessions = Object.entries(all)
+    .filter(([,v]) => Date.now()-v.ts < 7*86400000 && v.scanned && v.scanned.length)
+    .sort((a,b) => b[1].ts - a[1].ts);
+  if(!sessions.length) return;
+  // Создаём баннер
+  let existing = document.getElementById('restoreBanner');
+  if(existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'restoreBanner';
+  banner.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px;';
+  banner.innerHTML = '<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:2px">📂 Сохранённые сессии</div>';
+  sessions.forEach(([name, data]) => {
+    const age = Math.round((Date.now()-data.ts)/60000);
+    const ageStr = age < 60 ? age+'мин назад' : age < 1440 ? Math.round(age/60)+'ч назад' : Math.round(age/1440)+'д назад';
+    const isActive = name === fileName;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--surface);cursor:pointer;' + (isActive?'border:1px solid var(--accent);':'border:1px solid transparent;');
+    row.innerHTML = `<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div><div style="font-size:11px;color:var(--muted)">${data.scanned.length} принято · ${ageStr}</div></div><button style="font-size:11px;padding:3px 8px;border-radius:5px;background:var(--accent);color:#fff;border:none;cursor:pointer">Восстановить</button><button style="font-size:11px;padding:3px 6px;border-radius:5px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);cursor:pointer">✕</button>`;
+    row.querySelectorAll('button')[0].addEventListener('click', e => {
+      e.stopPropagation();
+      // Сначала загружаем файл если это не текущий
+      if(name !== _currentFile) {
+        alert('Чтобы восстановить сессию "' + name + '", загрузите этот файл ЧЗ.');
+        return;
+      }
+      if(lsRestore(name)){
+        renderSkuCards(); updateStats();
+        showFlash('ok','🔄','Сессия восстановлена', data.scanned.length+' кодов загружено','');
+        banner.remove();
+      }
+    });
+    row.querySelectorAll('button')[1].addEventListener('click', e => {
+      e.stopPropagation();
+      const all2 = lsAll(); delete all2[name]; localStorage.setItem(LS_ROOT,JSON.stringify(all2));
+      row.remove();
+      if(!banner.querySelectorAll('div[style*="flex:1"]').length) banner.remove();
+    });
+    banner.appendChild(row);
+  });
+  // Вставляем баннер перед skuSection
+  const skuSec = document.getElementById('skuSection');
+  skuSec.parentNode.insertBefore(banner, skuSec);
+}
+
+</script>
+</body>
+</html>
