@@ -304,7 +304,7 @@ details>div{margin-top:6px;font-size:12px;color:var(--muted);}
   <div class="logo-icon">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><path d="M3 3h3v3H3zM3 10.5h3v3H3zM3 18h3v3H3zM10.5 3h3v3h-3zM10.5 10.5h3v3h-3zM10.5 18h3v3h-3zM18 3h3v3h-3zM18 10.5h3v3h-3zM18 18h3v3h-3z"/></svg>
   </div>
-  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.14</div></div>
+  <div><div class="logo-text">Сканер ЧЗ</div><div class="logo-sub">Проверка маркировки v6.15</div></div>
   <div class="hdr-right">
     <button class="btn-icon" id="btnHelp" title="Справка">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -472,7 +472,7 @@ details>div{margin-top:6px;font-size:12px;color:var(--muted);}
   <div class="help-dialog">
     <div class="help-hdr">
       <span style="font-size:18px">📖</span>
-      <strong style="font-size:14px">Справка — Сканер ЧЗ v6.14</strong>
+      <strong style="font-size:14px">Справка — Сканер ЧЗ v6.15</strong>
       <button class="help-close" id="helpClose">✕</button>
     </div>
     <div class="help-body">
@@ -626,6 +626,7 @@ const btnFinish=$('btnFinish'), btnReset=$('btnReset');
 const placeholder=$('placeholder');
 const scanPanel=$('scanPanel'), scanDot=$('scanDot'), scanHint=$('scanHint');
 const scanInput=$('scanInput'), btnCam=$('btnCam');
+  if ('ontouchstart' in window) {scanInput.setAttribute('inputmode', 'none');}
 const camWrap=$('camWrap'), camVideo=$('camVideo');
 const flash=$('flash'), flashIcon=$('flashIcon'), flashTitle=$('flashTitle'), flashSub=$('flashSub'), flashDetail=$('flashDetail');
 const logWrap=$('logWrap'), logBody=$('logBody'), logCount=$('logCount'), btnClear=$('btnClear');
@@ -778,6 +779,12 @@ scanInput.addEventListener('input', function() {
   var val = scanInput.value;
   var len = val.length;
 
+  // Fix 2a: Android — GS уже в value, ждём '=' или длину
+  if (val.indexOf('\x1d') !== -1 && len >= 81 && val.charAt(len - 1) === '=') {
+    flush();
+    return;
+  }
+
   // Конец DataMatrix ЧЗ: последний символ '=' и длина >= 81
   if (len >= 81 && val.charAt(len - 1) === '=') {
     flush();
@@ -790,8 +797,11 @@ scanInput.addEventListener('input', function() {
     var savedGs = gsPos.slice();
     reset();
     for (var i = 0; i < parts.length; i++) {
-      var p = parts[i].trim();
-      if (p.length >= 20) handleScan(insertGS(p, i === 0 ? savedGs : []));
+      var p = parts[i]; // не делаем trim — GS может быть в начале/конце
+      if (p.length >= 20) {
+        var assembled = p.indexOf('\x1d') !== -1 ? p : insertGS(p, i === 0 ? savedGs : []);
+        handleScan(assembled.trim());
+      }
     }
   }
 });
@@ -810,11 +820,18 @@ scanInput.addEventListener('keydown', function(e) {
 function flush() {
   var raw = buildRaw();
   reset();
-  if (raw.trim().length >= 20) handleScan(raw.trim());
+  var trimmed = raw.trim();
+  if (trimmed.length >= 20) handleScan(trimmed);
 }
 
 function buildRaw() {
-  return insertGS(scanInput.value, gsPos);
+  var val = scanInput.value;
+  // Android: GS (\x1d) уже в value — insertGS не нужен, gsPos пуст
+  // Windows: GS пойман через keypress и лежит в gsPos — вставляем вручную
+  if (val.indexOf('\x1d') !== -1) {
+    return val; // Android path — GS уже есть
+  }
+  return insertGS(val, gsPos); // Windows path
 }
 
 function insertGS(val, positions) {
@@ -1091,6 +1108,12 @@ let codeReader=null, camActive=false;
 btnCam.addEventListener('click',()=>{
   if(!camActive) startCamera(); else stopCamera();
 });
+
+function normalizeCamCode(text) {
+  // ZXing иногда добавляет префикс ]d0, ]C1, ]e0 и т.п. — убираем
+  return text.replace(/^\]([dCcQe][0-9A-Fa-f]?)/, '');
+}
+
 async function startCamera(){
   try{
     if(typeof ZXing==='undefined'){
@@ -1109,9 +1132,19 @@ async function startCamera(){
     btnCam.classList.add('active');
     camActive=true;
     scanHint.textContent='Камера активна — наводите на DataMatrix';
-    codeReader=new ZXing.BrowserMultiFormatReader();
-    codeReader.decodeFromStream(stream,camVideo,result=>{
-      if(result){handleScan(result.getText());}
+    // Fix 3: hints для GS1/DataMatrix + нормализация префиксов
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.ASSUME_GS1, true);
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.DATA_MATRIX,
+      ZXing.BarcodeFormat.QR_CODE,
+      ZXing.BarcodeFormat.EAN_13
+    ]);
+    codeReader = new ZXing.BrowserMultiFormatReader(hints);
+    codeReader.decodeFromStream(stream, camVideo, result => {
+      if (result) {
+        handleScan(normalizeCamCode(result.getText()));
+      }
     });
   }catch(e){
     showFlash('err','📷','Ошибка камеры',e.message||'Нет доступа к камере','');
